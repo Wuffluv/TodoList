@@ -21,6 +21,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Активность для mainmenu -->
+        <activity
+            android:name=".MainMenuActivity"
+            android:exported="true" />
+
+        <!-- Активность для регистрации -->
+        <activity
+            android:name=".ActivityRegistration"
+            android:exported="true" />
     </application>
 
 </manifest>

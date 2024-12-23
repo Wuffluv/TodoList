@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    //Поле для регистрации Email нового пользователя
+
     <EditText
         android:id="@+id/NewEmail"
         android:layout_width="wrap_content"
@@ -20,7 +20,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.198" />
 
-    //Поле для регистрации имени нового пользователя
+
     <EditText
         android:id="@+id/NewName"
         android:layout_width="wrap_content"
@@ -36,7 +36,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.344" />
 
-    //Поле для регистрации пароля нового пользователя
+
     <EditText
         android:id="@+id/NewPassword"
         android:layout_width="wrap_content"
@@ -51,7 +51,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    //Кнопка регистрации
+
     <Button
         android:id="@+id/RegistryButt"
         android:layout_width="wrap_content"
