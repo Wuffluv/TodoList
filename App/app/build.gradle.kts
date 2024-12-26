@@ -28,15 +28,16 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+
     }
 }
 
 dependencies {
-
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
+    implementation("androidx.recyclerview:recyclerview:1.2.1")
     implementation("com.google.android.material:material:1.6.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

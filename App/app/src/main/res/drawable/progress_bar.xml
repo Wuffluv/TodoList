@@ -1,0 +1,23 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Задний фон прогресса -->
+    <item android:id="@+id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="4dp" />
+            <solid android:color="@android:color/darker_gray" />
+        </shape>
+    </item>
+
+    <!-- Полоска, которая будет заливаться по мере прогресса -->
+    <item android:id="@+id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="4dp" />
+                <!-- Поменяйте цвет на любой другой (например, @color/pink_500),
+                     если хотите сделать свою стилизацию -->
+                <solid android:color="@android:color/holo_blue_light" />
+            </shape>
+        </clip>
+    </item>
+
+</layer-list>

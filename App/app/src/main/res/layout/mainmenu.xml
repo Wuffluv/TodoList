@@ -7,6 +7,33 @@
     android:background="#281B28"
     tools:context=".MainMenuActivity">
 
+    <!-- Прогресс-бар -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <ProgressBar
+            android:id="@+id/taskProgressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:progressDrawable="@drawable/progress_bar"
+            android:max="100"
+            android:progress="0" />
+
+        <TextView
+            android:id="@+id/progressTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:text="Прогресс: 0%" />
+    </LinearLayout>
+
     <!-- RecyclerView для списка задач -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/taskRecyclerView"
