@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -7,43 +8,52 @@
     android:background="#281B28"
     tools:context=".MainMenuActivity">
 
-    <!-- Прогресс-бар -->
+    <!-- Вертикальный LinearLayout для Прогресс-бара и списка -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:orientation="vertical"
-        android:gravity="center_horizontal">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <ProgressBar
-            android:id="@+id/taskProgressBar"
-            style="?android:attr/progressBarStyleHorizontal"
+        <!-- Блок прогресса -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="16dp"
-            android:progressDrawable="@drawable/progress_bar"
-            android:max="100"
-            android:progress="0" />
-
-        <TextView
-            android:id="@+id/progressTextView"
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:text="Прогресс: 0%" />
+            android:padding="16dp"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <ProgressBar
+                android:id="@+id/taskProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="16dp"
+                android:progressDrawable="@drawable/progress_bar"
+                android:max="100"
+                android:progress="0" />
+
+            <TextView
+                android:id="@+id/progressTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:text="@string/progress_init"/>
+            <!-- Вместо "Прогресс: 0%" используем ресурс @string/progress_init -->
+        </LinearLayout>
+
+        <!-- Список задач (RecyclerView) занимает всё оставшееся пространство -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/taskRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:padding="16dp"
+            android:clipToPadding="false"
+            android:scrollbars="vertical" />
     </LinearLayout>
 
-    <!-- RecyclerView для списка задач -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/taskRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:padding="16dp"
-        android:clipToPadding="false"
-        android:scrollbars="vertical" />
-
-    <!-- Нижний бар -->
+    <!-- Нижний бар (BottomAppBar) -->
     <com.google.android.material.bottomappbar.BottomAppBar
         android:id="@+id/bottomAppBar"
         android:layout_width="match_parent"
@@ -56,7 +66,7 @@
         app:fabCradleVerticalOffset="10dp"
         app:hideOnScroll="false" />
 
-    <!-- Кнопка -->
+    <!-- Плавающая кнопка (FloatingActionButton) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
