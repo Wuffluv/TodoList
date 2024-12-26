@@ -4,5 +4,5 @@
     <string name="fab_desc">Floating Action Button</string>
     <string name="welcome_text">Welcome to Main Menu</string>
     <string name="progress_init">Прогресс: 0%</string>\
-
+    <string name="delete_task">Удаление</string>
 </resources>
