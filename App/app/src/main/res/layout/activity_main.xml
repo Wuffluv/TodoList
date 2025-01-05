@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
@@ -8,65 +9,62 @@
     android:background="#281B28"
     tools:context=".MainActivity">
 
+    <!-- Поле ввода: Email -->
+    <EditText
+        android:id="@+id/EnterEmail"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:hint="Email"
+        android:inputType="textEmailAddress"
+        android:textAlignment="center"
+        android:textColor="@android:color/white"
+        android:textColorHint="#BBFFFFFF"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintVertical_bias="0.2" />
 
+    <!-- Поле ввода: Пароль -->
+    <EditText
+        android:id="@+id/EnterPassword"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:hint="Password"
+        android:inputType="textPassword"
+        android:textAlignment="center"
+        android:textColor="@android:color/white"
+        android:textColorHint="#BBFFFFFF"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/EnterEmail"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintVertical_bias="0.05" />
+
+    <!-- Кнопка входа -->
+    <Button
+        android:id="@+id/LoginButt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Login"
+        app:layout_constraintTop_toBottomOf="@+id/EnterPassword"
+        app:layout_constraintHorizontal_bias="0.3"
+        app:layout_constraintVertical_bias="0.15"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/NewLoginButt" />
+
+    <!-- Кнопка "Новый пользователь" -->
     <Button
         android:id="@+id/NewLoginButt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="64dp"
         android:text="New User"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/EnterPassword"
+        app:layout_constraintStart_toEndOf="@+id/LoginButt"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.572" />
+        app:layout_constraintHorizontal_bias="0.7"
+        app:layout_constraintVertical_bias="0.15" />
 
-
-    <Button
-        android:id="@+id/LoginButt"
-        android:layout_width="105dp"
-        android:layout_height="49dp"
-        android:text="Login"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/NewLoginButt"
-        app:layout_constraintHorizontal_bias="0.557"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.572" />
-
-
-    <EditText
-        android:id="@+id/EnterEmail"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:backgroundTint="#FFE8E8"
-        android:ems="10"
-        android:hint="Email"
-        android:inputType="text"
-        android:textAlignment="center"
-        android:textColor="#FFFCFC"
-        android:textColorLink="#FFFFFF"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.502"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.179" />
-
-
-    <EditText
-        android:id="@+id/EnterPassword"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:ems="10"
-        android:hint="Password"
-        android:inputType="text"
-        android:textAlignment="center"
-        android:textColor="#FFFFFF"
-        android:textColorLink="#FDFDFD"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.497"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.325" />
 </androidx.constraintlayout.widget.ConstraintLayout>
