@@ -42,7 +42,7 @@ public class ActivityRegistration extends AppCompatActivity {
                 String name = newName.getText().toString().trim();
                 String password = newPassword.getText().toString().trim();
 
-                // Простейшая проверка на пустоту
+                // проверка на пустоту
                 if (email.isEmpty() || name.isEmpty() || password.isEmpty()) {
                     Toast.makeText(ActivityRegistration.this,
                             "Заполните все поля!",

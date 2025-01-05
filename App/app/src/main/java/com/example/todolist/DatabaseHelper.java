@@ -19,9 +19,8 @@ import java.util.List;
  */
 public class DatabaseHelper extends SQLiteOpenHelper {
 
-    // Название файла вашей базы (физический .db-файл на устройстве)
+    // Название БД
     private static final String DATABASE_NAME = "Todolist.db";
-    // Версия схемы: меняем, если структура таблицы изменилась (добавили userId в tasks).
     private static final int DATABASE_VERSION = 3;
 
     // Таблица user

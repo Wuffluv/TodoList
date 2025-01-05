@@ -39,10 +39,10 @@
                 android:textColor="@android:color/white"
                 android:textSize="14sp"
                 android:text="@string/progress_init"/>
-            <!-- Вместо "Прогресс: 0%" используем ресурс @string/progress_init -->
+
         </LinearLayout>
 
-        <!-- Список задач (RecyclerView) занимает всё оставшееся пространство -->
+
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/taskRecyclerView"
             android:layout_width="match_parent"

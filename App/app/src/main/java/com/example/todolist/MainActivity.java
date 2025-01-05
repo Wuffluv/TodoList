@@ -22,7 +22,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main); // Ваш XML с EnterEmail, EnterPassword, LoginButt, NewLoginButt
+        setContentView(R.layout.activity_main);
 
         // Инициализируем поля
         enterEmail = findViewById(R.id.EnterEmail);
@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Кнопка "New User" -> ActivityRegistration (или что у вас)
+        // Кнопка "New User" -> ActivityRegistration
         newUserButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

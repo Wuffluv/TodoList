@@ -9,7 +9,7 @@ public class Task {
     private Date dateTime;
     private boolean completed;
 
-    // Конструктор для чтения задачи из БД (полное info)
+    // Конструктор для чтения задачи из БД
     public Task(int id, int userId, String description, Date dateTime, boolean completed) {
         this.id = id;
         this.userId = userId;
