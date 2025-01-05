@@ -3,12 +3,12 @@ package com.example.todolist;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.os.Bundle;
-import android.view.View;           // Добавлен импорт
-import android.widget.Button;      // Добавлен импорт
-import android.widget.EditText;    // Добавлен импорт
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;        // Добавлен импорт
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,6 +18,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
 
 public class MainMenuActivity extends AppCompatActivity {
 
@@ -25,31 +27,51 @@ public class MainMenuActivity extends AppCompatActivity {
     private ProgressBar taskProgressBar;
     private TextView progressTextView;
 
+    private DatabaseHelper dbHelper;
+    private int userId; // текущий пользователь
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.mainmenu);
 
+        // Извлекаем userId из Intent
+        userId = getIntent().getIntExtra("USER_ID", -1);
+        if (userId == -1) {
+            // На случай, если что-то пошло не так
+            Toast.makeText(this, "Неизвестный пользователь!", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        // Инициализируем UI
         taskProgressBar = findViewById(R.id.taskProgressBar);
         progressTextView = findViewById(R.id.progressTextView);
 
         RecyclerView taskRecyclerView = findViewById(R.id.taskRecyclerView);
-        taskAdapter = new TaskAdapter(this::updateProgressBar);
+        dbHelper = new DatabaseHelper(this);
+
+        // Загружаем задачи ТОЛЬКО для текущего userId
+        List<Task> userTasks = dbHelper.getTasksForUser(userId);
+
+        // Создаём адаптер: передаём список задач, dbHelper, колбэк (updateProgressBar)
+        taskAdapter = new TaskAdapter(userTasks, dbHelper, this::updateProgressBar);
         taskRecyclerView.setAdapter(taskAdapter);
         taskRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
         FloatingActionButton fab = findViewById(R.id.fab);
         fab.setOnClickListener(v -> showAddTaskDialog());
+
+        // Обновляем прогресс
+        updateProgressBar();
     }
 
     private void showAddTaskDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
-        // Инфлейтим layout для диалога
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_task, null);
         builder.setView(dialogView);
 
-        // Находим поля и кнопки в dialog_add_task.xml
         EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
         Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
         Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
@@ -57,7 +79,6 @@ public class MainMenuActivity extends AppCompatActivity {
 
         final Calendar calendar = Calendar.getInstance();
 
-        // Установка даты
         pickDateButton.setOnClickListener(v -> {
             DatePickerDialog datePickerDialog = new DatePickerDialog(
                     this,
@@ -72,7 +93,6 @@ public class MainMenuActivity extends AppCompatActivity {
             datePickerDialog.show();
         });
 
-        // Установка времени
         pickTimeButton.setOnClickListener(v -> {
             TimePickerDialog timePickerDialog = new TimePickerDialog(
                     this,
@@ -88,16 +108,20 @@ public class MainMenuActivity extends AppCompatActivity {
             timePickerDialog.show();
         });
 
-        // Создаём и отображаем диалог
         AlertDialog dialog = builder.create();
 
-        // Кнопка "Добавить задачу"
         addTaskButton.setOnClickListener(v -> {
             String description = taskDescription.getText().toString();
             if (description.isEmpty()) {
                 Toast.makeText(this, "Введите описание задачи", Toast.LENGTH_SHORT).show();
             } else {
-                taskAdapter.addTask(new Task(description, calendar.getTime()));
+                Date date = calendar.getTime();
+                // Создаём новую задачу (конструктор userId, desc, date)
+                Task newTask = new Task(userId, description, date);
+
+                // Добавляем задачу через адаптер
+                taskAdapter.addTask(newTask);
+
                 updateProgressBar();
                 dialog.dismiss();
             }
@@ -109,7 +133,8 @@ public class MainMenuActivity extends AppCompatActivity {
     private void updateProgressBar() {
         int totalTasks = taskAdapter.getItemCount();
         int completedTasks = taskAdapter.getCompletedTaskCount();
-        int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
+        int progress = (totalTasks > 0) ? (completedTasks * 100 / totalTasks) : 0;
+
         taskProgressBar.setProgress(progress);
         progressTextView.setText("Прогресс: " + progress + "%");
     }

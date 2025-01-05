@@ -9,39 +9,38 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+/**
+ * Экран логина: ввод Email и Password.
+ * При успешном логине -> MainMenuActivity (передаём userId).
+ */
 public class MainActivity extends AppCompatActivity {
 
     private EditText enterEmail, enterPassword;
     private Button loginButton, newUserButton;
-
-    private DatabaseHelper dbHelper; // для работы с SQLite
+    private DatabaseHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main); // Это ваш XML с полями Email/Password и кнопками
+        setContentView(R.layout.activity_main); // Ваш XML с EnterEmail, EnterPassword, LoginButt, NewLoginButt
 
-        // Инициализация полей ввода
+        // Инициализируем поля
         enterEmail = findViewById(R.id.EnterEmail);
         enterPassword = findViewById(R.id.EnterPassword);
+        loginButton = findViewById(R.id.LoginButt);
+        newUserButton = findViewById(R.id.NewLoginButt);
 
-        // Инициализация кнопок
-        loginButton = findViewById(R.id.LoginButt);    // Кнопка "Login"
-        newUserButton = findViewById(R.id.NewLoginButt); // Кнопка "New User"
-
-        // Создаём экземпляр DatabaseHelper
+        // Создаём helper
         dbHelper = new DatabaseHelper(this);
 
-        // Обработчик для кнопки Login
+        // Кнопка Login
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
-                // Считываем email и пароль, введённые пользователем
                 String email = enterEmail.getText().toString().trim();
                 String password = enterPassword.getText().toString().trim();
 
-                // Проверка на пустоту
                 if (email.isEmpty() || password.isEmpty()) {
                     Toast.makeText(MainActivity.this,
                             "Введите Email и пароль!",
@@ -49,20 +48,21 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
-                // Проверяем в базе, существует ли такой пользователь
                 boolean exists = dbHelper.checkUserCredentials(email, password);
                 if (exists) {
-                    // Успешный вход
+                    // Получаем userId
+                    int userId = dbHelper.getUserIdByEmail(email);
+
                     Toast.makeText(MainActivity.this,
                             "Добро пожаловать!",
                             Toast.LENGTH_SHORT).show();
 
-                    // Переход на главное меню (MainMenuActivity)
+                    // Переходим на MainMenuActivity, передаём userId
                     Intent intent = new Intent(MainActivity.this, MainMenuActivity.class);
+                    intent.putExtra("USER_ID", userId);
                     startActivity(intent);
                     finish();
                 } else {
-                    // Неверные данные
                     Toast.makeText(MainActivity.this,
                             "Неверный Email или пароль!",
                             Toast.LENGTH_SHORT).show();
@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Обработчик для кнопки New User
+        // Кнопка "New User" -> ActivityRegistration (или что у вас)
         newUserButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

@@ -10,61 +10,65 @@
     tools:context=".MainActivity">
 
     <!-- Поле ввода: Email -->
+
+    <!-- Поле ввода: Пароль -->
+
+    <!-- Кнопка входа -->
+
     <EditText
         android:id="@+id/EnterEmail"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="244dp"
         android:hint="Email"
         android:inputType="textEmailAddress"
         android:textAlignment="center"
         android:textColor="@android:color/white"
         android:textColorHint="#BBFFFFFF"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintVertical_bias="0.2" />
+        app:layout_constraintHorizontal_bias="0.218"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Поле ввода: Пароль -->
     <EditText
         android:id="@+id/EnterPassword"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="32dp"
         android:hint="Password"
         android:inputType="textPassword"
         android:textAlignment="center"
         android:textColor="@android:color/white"
         android:textColorHint="#BBFFFFFF"
-        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/EnterEmail"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintVertical_bias="0.05" />
+        app:layout_constraintHorizontal_bias="0.906"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/EnterEmail" />
 
-    <!-- Кнопка входа -->
+    <!-- Кнопка "Новый пользователь" -->
+
     <Button
         android:id="@+id/LoginButt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
         android:text="Login"
-        app:layout_constraintTop_toBottomOf="@+id/EnterPassword"
+        app:layout_constraintEnd_toStartOf="@+id/NewLoginButt"
         app:layout_constraintHorizontal_bias="0.3"
-        app:layout_constraintVertical_bias="0.15"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/NewLoginButt" />
+        app:layout_constraintTop_toBottomOf="@+id/EnterPassword" />
 
-    <!-- Кнопка "Новый пользователь" -->
     <Button
         android:id="@+id/NewLoginButt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
         android:text="New User"
-        app:layout_constraintTop_toBottomOf="@+id/EnterPassword"
-        app:layout_constraintStart_toEndOf="@+id/LoginButt"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.7"
-        app:layout_constraintVertical_bias="0.15" />
+        app:layout_constraintStart_toEndOf="@+id/LoginButt"
+        app:layout_constraintTop_toBottomOf="@+id/EnterPassword" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
