@@ -48,7 +48,6 @@
             android:padding="16dp"
             android:clipToPadding="false"
             android:scrollbars="vertical" />
-
     </LinearLayout>
 
     <com.google.android.material.bottomappbar.BottomAppBar
@@ -63,6 +62,7 @@
         app:fabCradleVerticalOffset="10dp"
         app:hideOnScroll="false" />
 
+    <!-- Существующий FAB по центру -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
@@ -73,5 +73,17 @@
         app:layout_anchor="@id/bottomAppBar"
         app:layout_anchorGravity="center"
         app:tint="@color/white" />
+
+    <!-- ВТОРАЯ кнопка (FAB) в правом нижнем углу -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="Открыть настройки"
+        android:src="@android:drawable/ic_menu_manage"
+        app:backgroundTint="@color/dark_gray"
+        app:layout_anchor="@id/bottomAppBar"
+        app:layout_anchorGravity="end"
+        app:tint="@android:color/white" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
