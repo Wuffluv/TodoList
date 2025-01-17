@@ -3,6 +3,11 @@
     <string name="desc_button_icon">Описание кнопки</string>
     <string name="fab_desc">Floating Action Button</string>
     <string name="welcome_text">Welcome to Main Menu</string>
-    <string name="progress_init">Прогресс: 0%</string>\
+    <string name="progress_init">Прогресс: 0%</string>
     <string name="delete_task">Удаление</string>
+
+    <!-- Добавьте следующие строки, если они упоминаются в task_item.xml -->
+    <string name="edit_task">Редактировать задачу</string>
+    <string name="add_subtask">Добавить подзадачу</string>
+    <string name="expand_subtasks">Развернуть подзадачи</string>
 </resources>

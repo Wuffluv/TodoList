@@ -38,7 +38,6 @@ public class MainMenuActivity extends AppCompatActivity {
         // Извлекаем userId из Intent
         userId = getIntent().getIntExtra("USER_ID", -1);
         if (userId == -1) {
-            // На случай, если что-то пошло не так
             Toast.makeText(this, "Неизвестный пользователь!", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -54,8 +53,8 @@ public class MainMenuActivity extends AppCompatActivity {
         // Загружаем задачи ТОЛЬКО для текущего userId
         List<Task> userTasks = dbHelper.getTasksForUser(userId);
 
-        // Создаём адаптер: передаём список задач, dbHelper, колбэк (updateProgressBar)
-        taskAdapter = new TaskAdapter(userTasks, dbHelper, this::updateProgressBar);
+        // Создаём адаптер: передаём список задач, dbHelper, колбэк (updateProgressBar), и контекст
+        taskAdapter = new TaskAdapter(userTasks, dbHelper, this::updateProgressBar, this);
         taskRecyclerView.setAdapter(taskAdapter);
         taskRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
@@ -116,7 +115,7 @@ public class MainMenuActivity extends AppCompatActivity {
                 Toast.makeText(this, "Введите описание задачи", Toast.LENGTH_SHORT).show();
             } else {
                 Date date = calendar.getTime();
-                // Создаём новую задачу (конструктор userId, desc, date)
+                // Создаём новую задачу
                 Task newTask = new Task(userId, description, date);
 
                 // Добавляем задачу через адаптер
@@ -130,7 +129,7 @@ public class MainMenuActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    private void updateProgressBar() {
+    public void updateProgressBar() {
         int totalTasks = taskAdapter.getItemCount();
         int completedTasks = taskAdapter.getCompletedTaskCount();
         int progress = (totalTasks > 0) ? (completedTasks * 100 / totalTasks) : 0;

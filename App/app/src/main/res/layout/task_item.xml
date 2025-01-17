@@ -6,6 +6,7 @@
     android:layout_height="wrap_content"
     android:padding="8dp">
 
+    <!-- Чекбокс выполнения задачи -->
     <CheckBox
         android:id="@+id/taskCheckBox"
         android:layout_width="wrap_content"
@@ -14,6 +15,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
+    <!-- Текст задачи -->
     <TextView
         android:id="@+id/taskTextView"
         android:layout_width="0dp"
@@ -21,6 +23,20 @@
         android:layout_marginStart="8dp"
         android:textColor="@android:color/white"
         app:layout_constraintStart_toEndOf="@+id/taskCheckBox"
+        app:layout_constraintEnd_toStartOf="@+id/editButton"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Кнопка редактирования задачи -->
+    <ImageButton
+        android:id="@+id/editButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="@string/edit_task"
+        android:src="@android:drawable/ic_menu_edit"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:tint="@android:color/holo_blue_light"
         app:layout_constraintEnd_toStartOf="@+id/deleteButton"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
@@ -38,5 +54,52 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Кнопка (иконка) развернуть/свернуть подзадачи -->
+    <ImageButton
+        android:id="@+id/expandButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:contentDescription="@string/expand_subtasks"
+        android:src="@android:drawable/arrow_down_float"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:tint="@android:color/holo_green_light"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/taskCheckBox"
+        />
+
+    <!-- Вложенный список для подзадач (по умолчанию GONE, показываем при развёртывании) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/subTaskRecyclerView"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/expandButton"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:paddingStart="32dp"
+        android:paddingLeft="32dp"
+        android:paddingEnd="32dp"
+        android:paddingRight="32dp"
+        android:nestedScrollingEnabled="false"/>
+
+    <!-- Кнопка добавления новой подзадачи (тоже будет видна только при развернутом виде) -->
+    <ImageButton
+        android:id="@+id/addSubTaskButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginStart="8dp"
+        android:contentDescription="@string/add_subtask"
+        android:src="@android:drawable/ic_input_add"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:tint="@android:color/holo_green_dark"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@+id/subTaskRecyclerView"
+        app:layout_constraintBottom_toBottomOf="@+id/subTaskRecyclerView"
+        app:layout_constraintEnd_toEndOf="parent"
+        />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

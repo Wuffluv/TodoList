@@ -12,16 +12,18 @@ import java.util.List;
 
 /**
  * Класс, упрощающий работу с локальной БД:
- * - Создание и обновление таблиц (user и tasks)
+ * - Создание и обновление таблиц (user, tasks, subtasks)
  * - Открытие/закрытие базы
- * - Методы для пользователей (addUser, checkUserCredentials, getUserIdByEmail)
- * - Методы для задач (addTask, getTasksForUser, updateTaskCompletion, deleteTask)
+ * - Методы для пользователей
+ * - Методы для задач
+ * - Методы для подзадач
  */
 public class DatabaseHelper extends SQLiteOpenHelper {
 
     // Название БД
     private static final String DATABASE_NAME = "Todolist.db";
-    private static final int DATABASE_VERSION = 3;
+    // Повышаем версию до 4, чтобы добавить таблицу subtasks
+    private static final int DATABASE_VERSION = 4;
 
     // Таблица user
     private static final String TABLE_USER = "user";
@@ -37,6 +39,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String COLUMN_DESCRIPTION = "description";
     private static final String COLUMN_DATE_TIME = "dateTime";   // храним long (в мс)
     private static final String COLUMN_IS_COMPLETED = "isCompleted";
+
+    // Новая таблица subtasks
+    private static final String TABLE_SUBTASKS = "subtasks";
+    private static final String COLUMN_SUBTASK_ID = "subtask_id";         // PK
+    private static final String COLUMN_PARENT_TASK_ID = "parentTaskId";   // FK -> tasks.task_id
+    private static final String COLUMN_SUBTASK_DESCRIPTION = "description";
+    private static final String COLUMN_SUBTASK_COMPLETED = "isCompleted";
 
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -62,12 +71,22 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 COLUMN_IS_COMPLETED + " INTEGER, " +
                 "FOREIGN KEY(" + COLUMN_USER_ID + ") REFERENCES " + TABLE_USER + "(" + COLUMN_ID + "))";
         db.execSQL(createTableTasks);
+
+        // Создаём таблицу subtasks
+        String createTableSubtasks = "CREATE TABLE " + TABLE_SUBTASKS + " (" +
+                COLUMN_SUBTASK_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_PARENT_TASK_ID + " INTEGER, " +
+                COLUMN_SUBTASK_DESCRIPTION + " TEXT, " +
+                COLUMN_SUBTASK_COMPLETED + " INTEGER, " +
+                "FOREIGN KEY(" + COLUMN_PARENT_TASK_ID + ") REFERENCES " + TABLE_TASKS + "(" + COLUMN_TASK_ID + "))";
+        db.execSQL(createTableSubtasks);
     }
 
     // Вызывается при изменении DATABASE_VERSION
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Удаляем старые таблицы и создаём заново (простой вариант миграции)
+        // Удаляем старые таблицы и создаём заново
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_SUBTASKS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_TASKS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USER);
         onCreate(db);
@@ -75,9 +94,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // ----------------------- Методы для пользователей ------------------------
 
-    /**
-     * Добавляет пользователя в таблицу user (простая вставка).
-     */
     public long addUser(String username, String password, String email) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -90,10 +106,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rowId;
     }
 
-    /**
-     * Проверяет, существует ли пользователь с указанным email и паролем.
-     * @return true, если такой пользователь найден; false — если нет
-     */
     public boolean checkUserCredentials(String email, String password) {
         SQLiteDatabase db = this.getReadableDatabase();
         String query = "SELECT * FROM " + TABLE_USER +
@@ -106,10 +118,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return exists;
     }
 
-    /**
-     * Получить ID пользователя (user.id) по его email.
-     * Возвращает -1, если не найден.
-     */
     public int getUserIdByEmail(String email) {
         SQLiteDatabase db = this.getReadableDatabase();
         String query = "SELECT " + COLUMN_ID + " FROM " + TABLE_USER + " WHERE " + COLUMN_EMAIL + "=?";
@@ -126,9 +134,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     // ----------------------- Методы для задач ------------------------
 
-    /**
-     * Добавить новую задачу, принадлежащую userId
-     */
     public long addTask(int userId, String description, long dateTime, boolean isCompleted) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -142,9 +147,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return rowId;
     }
 
-    /**
-     * Получить все задачи для конкретного userId
-     */
     public List<Task> getTasksForUser(int userId) {
         List<Task> tasks = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
@@ -171,8 +173,20 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Обновить isCompleted задачи
+     * Обновить isCompleted и (опционально) описание и время у задачи.
      */
+    public void updateTask(int taskId, String newDescription, long newDateTime, boolean isCompleted) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_DESCRIPTION, newDescription);
+        values.put(COLUMN_DATE_TIME, newDateTime);
+        values.put(COLUMN_IS_COMPLETED, isCompleted ? 1 : 0);
+
+        db.update(TABLE_TASKS, values, COLUMN_TASK_ID + "=?",
+                new String[]{String.valueOf(taskId)});
+        db.close();
+    }
+
     public void updateTaskCompletion(int taskId, boolean isCompleted) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -183,13 +197,79 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
     }
 
-    /**
-     * Удалить задачу
-     */
     public void deleteTask(int taskId) {
         SQLiteDatabase db = this.getWritableDatabase();
+        // Сначала удалим все подзадачи, связанные с этим taskId
+        db.delete(TABLE_SUBTASKS, COLUMN_PARENT_TASK_ID + "=?",
+                new String[]{String.valueOf(taskId)});
+        // Затем удалим саму задачу
         db.delete(TABLE_TASKS, COLUMN_TASK_ID + "=?",
                 new String[]{String.valueOf(taskId)});
+        db.close();
+    }
+
+    // ----------------------- Методы для подзадач ------------------------
+
+    public long addSubTask(int parentTaskId, String description) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_PARENT_TASK_ID, parentTaskId);
+        values.put(COLUMN_SUBTASK_DESCRIPTION, description);
+        values.put(COLUMN_SUBTASK_COMPLETED, 0);
+
+        long rowId = db.insert(TABLE_SUBTASKS, null, values);
+        db.close();
+        return rowId;
+    }
+
+    public List<SubTask> getSubTasksForTask(int parentTaskId) {
+        List<SubTask> subTasks = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT * FROM " + TABLE_SUBTASKS + " WHERE " + COLUMN_PARENT_TASK_ID + "=?";
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(parentTaskId)});
+
+        if (cursor.moveToFirst()) {
+            do {
+                int subTaskId = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_SUBTASK_ID));
+                int pTaskId = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_PARENT_TASK_ID));
+                String description = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SUBTASK_DESCRIPTION));
+                int completedInt = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_SUBTASK_COMPLETED));
+
+                boolean completed = (completedInt == 1);
+
+                SubTask subTask = new SubTask(subTaskId, pTaskId, description, completed);
+                subTasks.add(subTask);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return subTasks;
+    }
+
+    public void updateSubTaskCompletion(int subTaskId, boolean isCompleted) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_SUBTASK_COMPLETED, isCompleted ? 1 : 0);
+
+        db.update(TABLE_SUBTASKS, values, COLUMN_SUBTASK_ID + "=?",
+                new String[]{String.valueOf(subTaskId)});
+        db.close();
+    }
+
+    public void updateSubTaskDescription(int subTaskId, String newDescription) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_SUBTASK_DESCRIPTION, newDescription);
+
+        db.update(TABLE_SUBTASKS, values, COLUMN_SUBTASK_ID + "=?",
+                new String[]{String.valueOf(subTaskId)});
+        db.close();
+    }
+
+    public void deleteSubTask(int subTaskId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete(TABLE_SUBTASKS, COLUMN_SUBTASK_ID + "=?",
+                new String[]{String.valueOf(subTaskId)});
         db.close();
     }
 }
