@@ -8,13 +8,11 @@
     android:background="#281B28"
     tools:context=".MainMenuActivity">
 
-    <!-- Вертикальный LinearLayout для Прогресс-бара и списка -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- Блок прогресса -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -38,10 +36,9 @@
                 android:layout_marginTop="8dp"
                 android:textColor="@android:color/white"
                 android:textSize="14sp"
-                android:text="@string/progress_init"/>
+                android:text="Прогресс: 0%" />
 
         </LinearLayout>
-
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/taskRecyclerView"
@@ -51,9 +48,9 @@
             android:padding="16dp"
             android:clipToPadding="false"
             android:scrollbars="vertical" />
+
     </LinearLayout>
 
-    <!-- Нижний бар (BottomAppBar) -->
     <com.google.android.material.bottomappbar.BottomAppBar
         android:id="@+id/bottomAppBar"
         android:layout_width="match_parent"
@@ -66,7 +63,6 @@
         app:fabCradleVerticalOffset="10dp"
         app:hideOnScroll="false" />
 
-    <!-- Плавающая кнопка (FloatingActionButton) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"

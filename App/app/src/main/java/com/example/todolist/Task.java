@@ -3,13 +3,13 @@ package com.example.todolist;
 import java.util.Date;
 
 public class Task {
-    private int id;          // task_id из БД
-    private int userId;      // какой пользователь владелец
+    private int id;
+    private int userId;
     private String description;
     private Date dateTime;
     private boolean completed;
 
-    // Конструктор для чтения задачи из БД
+    // Конструктор для чтения из БД
     public Task(int id, int userId, String description, Date dateTime, boolean completed) {
         this.id = id;
         this.userId = userId;
@@ -18,7 +18,7 @@ public class Task {
         this.completed = completed;
     }
 
-    // Конструктор для создания "новой" задачи (ещё без id, isCompleted = false)
+    // Конструктор "новой" задачи
     public Task(int userId, String description, Date dateTime) {
         this.userId = userId;
         this.description = description;

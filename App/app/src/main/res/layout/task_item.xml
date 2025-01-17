@@ -41,7 +41,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- Кнопка (иконка) для удаления -->
+    <!-- Кнопка удаления задачи -->
     <ImageButton
         android:id="@+id/deleteButton"
         android:layout_width="48dp"
@@ -55,7 +55,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- Кнопка (иконка) развернуть/свернуть подзадачи -->
+    <!-- Кнопка развернуть/свернуть подзадачи -->
     <ImageButton
         android:id="@+id/expandButton"
         android:layout_width="48dp"
@@ -66,10 +66,9 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         app:tint="@android:color/holo_green_light"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/taskCheckBox"
-        />
+        app:layout_constraintTop_toBottomOf="@+id/taskCheckBox" />
 
-    <!-- Вложенный список для подзадач (по умолчанию GONE, показываем при развёртывании) -->
+    <!-- RecyclerView для подзадач (по умолчанию GONE) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/subTaskRecyclerView"
         android:layout_width="0dp"
@@ -83,9 +82,9 @@
         android:paddingLeft="32dp"
         android:paddingEnd="32dp"
         android:paddingRight="32dp"
-        android:nestedScrollingEnabled="false"/>
+        android:nestedScrollingEnabled="false" />
 
-    <!-- Кнопка добавления новой подзадачи (тоже будет видна только при развернутом виде) -->
+    <!-- Кнопка добавления подзадачи -->
     <ImageButton
         android:id="@+id/addSubTaskButton"
         android:layout_width="48dp"
@@ -99,7 +98,6 @@
         android:visibility="gone"
         app:layout_constraintTop_toTopOf="@+id/subTaskRecyclerView"
         app:layout_constraintBottom_toBottomOf="@+id/subTaskRecyclerView"
-        app:layout_constraintEnd_toEndOf="parent"
-        />
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -31,28 +31,12 @@ import java.util.Locale;
 
 public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder> {
 
-    private final List<Task> taskList;
-    private final DatabaseHelper dbHelper;          // Для операций с БД
-    private final Runnable progressUpdateCallback;
-    private final SimpleDateFormat dateFormat =
-            new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
-    private final Context context; // Нужно для диалогов
+    final List<Task> taskList;
+    final DatabaseHelper dbHelper;
+    final Runnable progressUpdateCallback;
+    final SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
+    final Context context;
 
-    public TaskAdapter(List<Task> tasks,
-                       DatabaseHelper dbHelper,
-                       Runnable progressUpdateCallback) {
-        this.taskList = tasks;
-        this.dbHelper = dbHelper;
-        this.progressUpdateCallback = progressUpdateCallback;
-        // Для удобства сортируем по дате
-        Collections.sort(taskList, Comparator.comparing(Task::getDateTime));
-
-        // Предположим, что context берём из первого элемента (не всегда лучшее решение, но для примера)
-        // Или можно передать context параметром в конструктор.
-        this.context = null;
-    }
-
-    // Лучше передавать context в этот конструктор
     public TaskAdapter(List<Task> tasks,
                        DatabaseHelper dbHelper,
                        Runnable progressUpdateCallback,
@@ -60,13 +44,13 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         this.taskList = tasks;
         this.dbHelper = dbHelper;
         this.progressUpdateCallback = progressUpdateCallback;
-        Collections.sort(taskList, Comparator.comparing(Task::getDateTime));
         this.context = context;
+
+        // Сортируем по дате
+        Collections.sort(taskList, Comparator.comparing(Task::getDateTime));
     }
 
-    /** Добавление новой задачи (связь с БД) */
     public void addTask(Task task) {
-        // 1) Сохраняем в БД, получаем ID
         long newId = dbHelper.addTask(
                 task.getUserId(),
                 task.getDescription(),
@@ -75,39 +59,32 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         );
         task.setId((int) newId);
 
-        // 2) Добавляем в список
         taskList.add(task);
         Collections.sort(taskList, Comparator.comparing(Task::getDateTime));
         notifyDataSetChanged();
-
-        // 3) Обновляем прогресс
         progressUpdateCallback.run();
     }
 
-    /** Удаляем задачу: из БД и локального списка */
     private void removeTask(int position) {
         if (position >= 0 && position < taskList.size()) {
             Task t = taskList.get(position);
-            dbHelper.deleteTask(t.getId()); // удаляем из БД
+            dbHelper.deleteTask(t.getId());
             taskList.remove(position);
             notifyItemRemoved(position);
-
             progressUpdateCallback.run();
         }
     }
 
-    /** Отметить задачу выполненной (или нет) */
     private void updateTaskCompletion(Task task, boolean isCompleted) {
         task.setCompleted(isCompleted);
         dbHelper.updateTaskCompletion(task.getId(), isCompleted);
+        // Можно точечно: notifyItemChanged(...) для одной позиции
         notifyDataSetChanged();
         progressUpdateCallback.run();
     }
 
-    // Добавим метод для редактирования задачи
     private void showEditTaskDialog(Task task) {
         if (context == null) return;
-
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_task, null);
         builder.setView(dialogView);
@@ -117,16 +94,14 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
         Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
 
-        // Переименуем кнопку, чтобы было понятно, что это "Сохранить изменения"
-        addTaskButton.setText("Сохранить");
+        addTaskButton.setText("Сохранить"); // переименуем для редактирования
 
         final Calendar calendar = Calendar.getInstance();
         calendar.setTime(task.getDateTime());
 
-        // Заполним поля старыми значениями
         taskDescription.setText(task.getDescription());
-        pickDateButton.setText(dateFormat.format(task.getDateTime()).split(" ")[0]); // "dd/MM/yyyy"
-        pickTimeButton.setText(dateFormat.format(task.getDateTime()).split(" ")[1]); // "HH:mm"
+        pickDateButton.setText(dateFormat.format(task.getDateTime()).split(" ")[0]); // dd/MM/yyyy
+        pickTimeButton.setText(dateFormat.format(task.getDateTime()).split(" ")[1]); // HH:mm
 
         pickDateButton.setOnClickListener(v -> {
             DatePickerDialog datePickerDialog = new DatePickerDialog(
@@ -158,50 +133,41 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         });
 
         AlertDialog dialog = builder.create();
-
         addTaskButton.setOnClickListener(v -> {
             String newDesc = taskDescription.getText().toString();
-            if (newDesc.isEmpty()) {
-                // Простейшая проверка
-                return;
-            }
+            if (newDesc.isEmpty()) return;
 
             Date newDate = calendar.getTime();
-            // Обновляем в БД
+            // Обновим в БД
             dbHelper.updateTask(task.getId(), newDesc, newDate.getTime(), task.isCompleted());
-
-            // Обновляем в памяти
+            // Обновим в памяти
             task.setDescription(newDesc);
             task.setDateTime(newDate);
             notifyDataSetChanged();
-
             progressUpdateCallback.run();
             dialog.dismiss();
         });
-
         dialog.show();
     }
 
     public int getCompletedTaskCount() {
         int count = 0;
         for (Task t : taskList) {
-            if (t.isCompleted()) {
-                count++;
-            }
+            if (t.isCompleted()) count++;
         }
         return count;
     }
 
     @NonNull
     @Override
-    public TaskAdapter.TaskViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
+    public TaskViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View v = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.task_item, parent, false);
-        return new TaskViewHolder(view, this);
+        return new TaskViewHolder(v, this);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull TaskAdapter.TaskViewHolder holder, int position) {
+    public void onBindViewHolder(@NonNull TaskViewHolder holder, int position) {
         Task task = taskList.get(position);
         holder.bind(task);
     }
@@ -223,7 +189,7 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         private final RecyclerView subTaskRecyclerView;
 
         private SubTaskAdapter subTaskAdapter;
-        private boolean isExpanded = false; // флаг, раскрыты ли подзадачи
+        private boolean isExpanded = false;
 
         public TaskViewHolder(@NonNull View itemView, TaskAdapter adapter) {
             super(itemView);
@@ -235,15 +201,6 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
             expandButton = itemView.findViewById(R.id.expandButton);
             addSubTaskButton = itemView.findViewById(R.id.addSubTaskButton);
             subTaskRecyclerView = itemView.findViewById(R.id.subTaskRecyclerView);
-
-            // При изменении чекбокса
-            taskCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    Task t = taskList.get(position);
-                    adapter.updateTaskCompletion(t, isChecked);
-                }
-            });
 
             // Удаление задачи
             deleteButton.setOnClickListener(v -> {
@@ -262,7 +219,7 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
                 }
             });
 
-            // Разворачиваем/сворачиваем подзадачи
+            // Развернуть/свернуть подзадачи
             expandButton.setOnClickListener(v -> {
                 isExpanded = !isExpanded;
                 if (isExpanded) {
@@ -276,7 +233,7 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
                 }
             });
 
-            // Добавляем новую подзадачу
+            // Добавление подзадачи
             addSubTaskButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
                 if (position != RecyclerView.NO_POSITION) {
@@ -287,11 +244,26 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         }
 
         public void bind(Task task) {
-            // Устанавливаем текст: описание + дата
-            String dateTime = dateFormat.format(task.getDateTime());
-            taskTextView.setText(task.getDescription() + " (" + dateTime + ")");
+            // 1) Снимаем слушатель
+            taskCheckBox.setOnCheckedChangeListener(null);
 
-            // Зачёркиваем, если выполнено
+            // 2) Устанавливаем состояние
+            taskCheckBox.setChecked(task.isCompleted());
+
+            // 3) Возвращаем слушатель
+            taskCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    Task t = taskList.get(position);
+                    updateTaskCompletion(t, isChecked);
+                }
+            });
+
+            // Текст: описание + дата
+            String dateTimeStr = dateFormat.format(task.getDateTime());
+            taskTextView.setText(task.getDescription() + " (" + dateTimeStr + ")");
+
+            // Зачёркиваем текст, если задача выполнена
             if (task.isCompleted()) {
                 taskTextView.setPaintFlags(
                         taskTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG
@@ -302,16 +274,13 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
                 );
             }
 
-            // Чекбокс
-            taskCheckBox.setChecked(task.isCompleted());
-
-            // Инициализируем SubTaskAdapter
+            // Инициализируем список подзадач
             List<SubTask> subTasks = dbHelper.getSubTasksForTask(task.getId());
             subTaskAdapter = new SubTaskAdapter(subTasks, dbHelper, progressUpdateCallback);
             subTaskRecyclerView.setLayoutManager(new LinearLayoutManager(itemView.getContext()));
             subTaskRecyclerView.setAdapter(subTaskAdapter);
 
-            // Начально свернуты
+            // Начальное состояние (свёрнуто)
             subTaskRecyclerView.setVisibility(View.GONE);
             addSubTaskButton.setVisibility(View.GONE);
             expandButton.setImageResource(android.R.drawable.arrow_down_float);
@@ -329,27 +298,22 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
             Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
             Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
 
-            // Скрываем выбор даты/времени, т.к. для подзадач не используем дату
             pickDateButton.setVisibility(View.GONE);
             pickTimeButton.setVisibility(View.GONE);
-
             addTaskButton.setText("Добавить подзадачу");
 
             AlertDialog dialog = builder.create();
-
             addTaskButton.setOnClickListener(v -> {
                 String description = taskDescription.getText().toString();
                 if (description.isEmpty()) {
                     return;
                 }
-                // Сохраним подзадачу в БД
                 long newId = dbHelper.addSubTask(task.getId(), description);
                 SubTask newSubTask = new SubTask((int) newId, task.getId(), description, false);
                 subTaskAdapter.addSubTask(newSubTask);
 
                 dialog.dismiss();
             });
-
             dialog.show();
         }
     }

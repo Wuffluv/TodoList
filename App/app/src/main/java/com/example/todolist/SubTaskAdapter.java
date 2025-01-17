@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
 /**
- * Адаптер для отображения списка подзадач внутри одной задачи.
+ * Адаптер для списка подзадач (SubTask)
  */
 public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskViewHolder> {
 
@@ -67,6 +67,7 @@ public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskV
     public void updateSubTaskCompletion(SubTask subTask, boolean isCompleted) {
         subTask.setCompleted(isCompleted);
         dbHelper.updateSubTaskCompletion(subTask.getSubTaskId(), isCompleted);
+        // Можно точечно: notifyItemChanged(...) если хотим только 1 элемент
         notifyDataSetChanged();
         updateParentProgressCallback.run();
     }
@@ -83,15 +84,6 @@ public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskV
             descriptionTextView = itemView.findViewById(R.id.subTaskTextView);
             deleteButton = itemView.findViewById(R.id.deleteSubTaskButton);
 
-            // Изменение чекбокса
-            checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                int pos = getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION) {
-                    SubTask st = subTaskList.get(pos);
-                    updateSubTaskCompletion(st, isChecked);
-                }
-            });
-
             // Удаление
             deleteButton.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
@@ -102,8 +94,22 @@ public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskV
         }
 
         public void bind(SubTask subTask) {
-            descriptionTextView.setText(subTask.getDescription());
+            // 1) Отключаем временно листенер
+            checkBox.setOnCheckedChangeListener(null);
+
+            // 2) Устанавливаем состояние
             checkBox.setChecked(subTask.isCompleted());
+
+            // 3) Возвращаем листенер
+            checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                int pos = getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    SubTask st = subTaskList.get(pos);
+                    updateSubTaskCompletion(st, isChecked);
+                }
+            });
+
+            descriptionTextView.setText(subTask.getDescription());
         }
     }
 }

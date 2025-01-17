@@ -35,7 +35,6 @@ public class MainMenuActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.mainmenu);
 
-        // Извлекаем userId из Intent
         userId = getIntent().getIntExtra("USER_ID", -1);
         if (userId == -1) {
             Toast.makeText(this, "Неизвестный пользователь!", Toast.LENGTH_SHORT).show();
@@ -43,17 +42,16 @@ public class MainMenuActivity extends AppCompatActivity {
             return;
         }
 
-        // Инициализируем UI
         taskProgressBar = findViewById(R.id.taskProgressBar);
         progressTextView = findViewById(R.id.progressTextView);
-
         RecyclerView taskRecyclerView = findViewById(R.id.taskRecyclerView);
+
         dbHelper = new DatabaseHelper(this);
 
-        // Загружаем задачи ТОЛЬКО для текущего userId
+        // Загружаем задачи
         List<Task> userTasks = dbHelper.getTasksForUser(userId);
 
-        // Создаём адаптер: передаём список задач, dbHelper, колбэк (updateProgressBar), и контекст
+        // Создаём адаптер (передаём контекст в конце)
         taskAdapter = new TaskAdapter(userTasks, dbHelper, this::updateProgressBar, this);
         taskRecyclerView.setAdapter(taskAdapter);
         taskRecyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -61,13 +59,11 @@ public class MainMenuActivity extends AppCompatActivity {
         FloatingActionButton fab = findViewById(R.id.fab);
         fab.setOnClickListener(v -> showAddTaskDialog());
 
-        // Обновляем прогресс
         updateProgressBar();
     }
 
     private void showAddTaskDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_task, null);
         builder.setView(dialogView);
 
@@ -79,7 +75,7 @@ public class MainMenuActivity extends AppCompatActivity {
         final Calendar calendar = Calendar.getInstance();
 
         pickDateButton.setOnClickListener(v -> {
-            DatePickerDialog datePickerDialog = new DatePickerDialog(
+            DatePickerDialog dpd = new DatePickerDialog(
                     this,
                     (view, year, month, dayOfMonth) -> {
                         calendar.set(year, month, dayOfMonth);
@@ -89,11 +85,11 @@ public class MainMenuActivity extends AppCompatActivity {
                     calendar.get(Calendar.MONTH),
                     calendar.get(Calendar.DAY_OF_MONTH)
             );
-            datePickerDialog.show();
+            dpd.show();
         });
 
         pickTimeButton.setOnClickListener(v -> {
-            TimePickerDialog timePickerDialog = new TimePickerDialog(
+            TimePickerDialog tpd = new TimePickerDialog(
                     this,
                     (view, hourOfDay, minute) -> {
                         calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
@@ -104,28 +100,22 @@ public class MainMenuActivity extends AppCompatActivity {
                     calendar.get(Calendar.MINUTE),
                     true
             );
-            timePickerDialog.show();
+            tpd.show();
         });
 
         AlertDialog dialog = builder.create();
-
         addTaskButton.setOnClickListener(v -> {
             String description = taskDescription.getText().toString();
             if (description.isEmpty()) {
                 Toast.makeText(this, "Введите описание задачи", Toast.LENGTH_SHORT).show();
             } else {
                 Date date = calendar.getTime();
-                // Создаём новую задачу
                 Task newTask = new Task(userId, description, date);
-
-                // Добавляем задачу через адаптер
                 taskAdapter.addTask(newTask);
-
                 updateProgressBar();
                 dialog.dismiss();
             }
         });
-
         dialog.show();
     }
 
@@ -133,7 +123,6 @@ public class MainMenuActivity extends AppCompatActivity {
         int totalTasks = taskAdapter.getItemCount();
         int completedTasks = taskAdapter.getCompletedTaskCount();
         int progress = (totalTasks > 0) ? (completedTasks * 100 / totalTasks) : 0;
-
         taskProgressBar.setProgress(progress);
         progressTextView.setText("Прогресс: " + progress + "%");
     }
