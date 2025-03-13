@@ -1,33 +1,48 @@
 package com.example.todolist;
 
+import com.google.firebase.firestore.Exclude;
+
 public class SubTask {
-    private int subTaskId;
-    private int parentTaskId;
+    private String subTaskId; // Для Firebase
+    private int intSubTaskId; // Для SQLite
+    private int parentTaskId; // Для SQLite
     private String description;
-    private boolean completed;
+    private boolean isCompleted;
 
-    // Для чтения из БД (с ID)
-    public SubTask(int subTaskId, int parentTaskId, String description, boolean completed) {
-        this.subTaskId = subTaskId;
-        this.parentTaskId = parentTaskId;
-        this.description = description;
-        this.completed = completed;
+    public SubTask() {
     }
 
-    // Для «новой» подзадачи (без ID)
-    public SubTask(int parentTaskId, String description) {
-        this.parentTaskId = parentTaskId;
+    // Конструктор для Firebase
+    public SubTask(String description) {
         this.description = description;
-        this.completed = false;
+        this.isCompleted = false;
     }
 
-    public int getSubTaskId() {
+    // Конструктор для SQLite
+    public SubTask(int subTaskId, int parentTaskId, String description, boolean isCompleted) {
+        this.intSubTaskId = subTaskId;
+        this.parentTaskId = parentTaskId;
+        this.description = description;
+        this.isCompleted = isCompleted;
+    }
+
+    @Exclude
+    public String getSubTaskId() {
         return subTaskId;
     }
-    public void setSubTaskId(int subTaskId) {
+    public void setSubTaskId(String subTaskId) {
         this.subTaskId = subTaskId;
     }
 
+    @Exclude
+    public int getIntSubTaskId() {
+        return intSubTaskId;
+    }
+    public void setIntSubTaskId(int intSubTaskId) {
+        this.intSubTaskId = intSubTaskId;
+    }
+
+    @Exclude
     public int getParentTaskId() {
         return parentTaskId;
     }
@@ -43,9 +58,9 @@ public class SubTask {
     }
 
     public boolean isCompleted() {
-        return completed;
+        return isCompleted;
     }
     public void setCompleted(boolean completed) {
-        this.completed = completed;
+        this.isCompleted = completed;
     }
 }

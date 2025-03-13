@@ -16,53 +16,53 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.bottomappbar.BottomAppBar;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainMenuActivity extends AppCompatActivity {
 
     private TaskAdapter taskAdapter;
     private ProgressBar taskProgressBar;
     private TextView progressTextView;
-
-    private DatabaseHelper dbHelper;
-    private int userId; // текущий пользователь
+    private FirebaseFirestore db;
+    private String userId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.mainmenu);
 
-        // Получаем userId из Intent
-        userId = getIntent().getIntExtra("USER_ID", -1);
-        if (userId == -1) {
+        userId = getIntent().getStringExtra("USER_ID");
+        if (userId == null) {
             Toast.makeText(this, "Неизвестный пользователь!", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        // Инициализация UI
+        db = FirebaseFirestore.getInstance();
+
         taskProgressBar = findViewById(R.id.taskProgressBar);
         progressTextView = findViewById(R.id.progressTextView);
         RecyclerView taskRecyclerView = findViewById(R.id.taskRecyclerView);
 
-        dbHelper = new DatabaseHelper(this);
-
-        // Загружаем задачи пользователя
-        List<Task> userTasks = dbHelper.getTasksForUser(userId);
-        taskAdapter = new TaskAdapter(userTasks, dbHelper, this::updateProgressBar, this);
+        List<Task> userTasks = new ArrayList<>();
+        taskAdapter = new TaskAdapter(userTasks, this::updateProgressBar, this);
         taskRecyclerView.setAdapter(taskAdapter);
         taskRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // FAB (по центру) для добавления задачи
+        loadTasks();
+
         FloatingActionButton fabAddTask = findViewById(R.id.fab);
         fabAddTask.setOnClickListener(v -> showAddTaskDialog());
 
-        // НОВАЯ кнопка (справа) для открытия настроек/профиля
         FloatingActionButton fabLogout = findViewById(R.id.fab_settings);
         fabLogout.setOnClickListener(v -> {
             Intent intent = new Intent(MainMenuActivity.this, SettingsActivity.class);
@@ -72,9 +72,25 @@ public class MainMenuActivity extends AppCompatActivity {
         updateProgressBar();
     }
 
-    /**
-     * Диалог для добавления новой задачи
-     */
+    private void loadTasks() {
+        db.collection("tasks")
+                .whereEqualTo("userId", userId)
+                .addSnapshotListener((snapshots, e) -> {
+                    if (e != null) {
+                        Toast.makeText(this, "Ошибка загрузки задач", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    List<Task> tasks = new ArrayList<>();
+                    for (QueryDocumentSnapshot doc : snapshots) {
+                        Task task = doc.toObject(Task.class);
+                        task.setId(doc.getId());
+                        tasks.add(task);
+                    }
+                    taskAdapter.setTasks(tasks);
+                    updateProgressBar();
+                });
+    }
+
     private void showAddTaskDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_task, null);
@@ -124,21 +140,21 @@ public class MainMenuActivity extends AppCompatActivity {
                 Toast.makeText(this, "Введите описание задачи", Toast.LENGTH_SHORT).show();
             } else {
                 Date date = calendar.getTime();
-                // Создаём новую задачу
-                Task newTask = new Task(userId, description, date);
-                taskAdapter.addTask(newTask);
+                Map<String, Object> task = new HashMap<>();
+                task.put("userId", userId);
+                task.put("description", description);
+                task.put("dateTime", date);
+                task.put("isCompleted", false);
 
-                updateProgressBar();
-                dialog.dismiss();
+                db.collection("tasks").add(task)
+                        .addOnSuccessListener(doc -> dialog.dismiss())
+                        .addOnFailureListener(e -> Toast.makeText(this, "Ошибка добавления задачи", Toast.LENGTH_SHORT).show());
             }
         });
 
         dialog.show();
     }
 
-    /**
-     * Обновление прогресс-бара
-     */
     public void updateProgressBar() {
         int totalTasks = taskAdapter.getItemCount();
         int completedTasks = taskAdapter.getCompletedTaskCount();

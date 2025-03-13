@@ -1,5 +1,6 @@
 package com.example.todolist;
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,23 +11,29 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.firestore.FirebaseFirestore;
+
 import java.util.List;
 
-/**
- * Адаптер для списка подзадач (SubTask)
- */
 public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskViewHolder> {
 
     private List<SubTask> subTaskList;
-    private DatabaseHelper dbHelper;
     private final Runnable updateParentProgressCallback;
+    private final Context context;
+    private final FirebaseFirestore db;
+    private final String taskId;
 
-    public SubTaskAdapter(List<SubTask> subTaskList,
-                          DatabaseHelper dbHelper,
-                          Runnable updateParentProgressCallback) {
+    public SubTaskAdapter(List<SubTask> subTaskList, Runnable updateParentProgressCallback, Context context, String taskId) {
         this.subTaskList = subTaskList;
-        this.dbHelper = dbHelper;
         this.updateParentProgressCallback = updateParentProgressCallback;
+        this.context = context;
+        this.db = FirebaseFirestore.getInstance();
+        this.taskId = taskId;
+    }
+
+    public void setSubTasks(List<SubTask> subTasks) {
+        this.subTaskList = subTasks;
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -48,28 +55,26 @@ public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskV
         return subTaskList.size();
     }
 
-    public void addSubTask(SubTask subTask) {
-        subTaskList.add(subTask);
-        notifyDataSetChanged();
-        updateParentProgressCallback.run();
+    private void removeSubTask(int position) {
+        SubTask st = subTaskList.get(position);
+        db.collection("tasks").document(taskId).collection("subtasks")
+                .document(st.getSubTaskId()).delete()
+                .addOnSuccessListener(aVoid -> {
+                    subTaskList.remove(position);
+                    notifyItemRemoved(position);
+                    updateParentProgressCallback.run();
+                });
     }
 
-    public void removeSubTask(int position) {
-        if (position >= 0 && position < subTaskList.size()) {
-            SubTask st = subTaskList.get(position);
-            dbHelper.deleteSubTask(st.getSubTaskId());
-            subTaskList.remove(position);
-            notifyItemRemoved(position);
-            updateParentProgressCallback.run();
-        }
-    }
-
-    public void updateSubTaskCompletion(SubTask subTask, boolean isCompleted) {
+    private void updateSubTaskCompletion(SubTask subTask, boolean isCompleted) {
         subTask.setCompleted(isCompleted);
-        dbHelper.updateSubTaskCompletion(subTask.getSubTaskId(), isCompleted);
-        // Можно точечно: notifyItemChanged(...) если хотим только 1 элемент
-        notifyDataSetChanged();
-        updateParentProgressCallback.run();
+        db.collection("tasks").document(taskId).collection("subtasks")
+                .document(subTask.getSubTaskId())
+                .update("isCompleted", isCompleted)
+                .addOnSuccessListener(aVoid -> {
+                    notifyDataSetChanged();
+                    updateParentProgressCallback.run();
+                });
     }
 
     class SubTaskViewHolder extends RecyclerView.ViewHolder {
@@ -84,7 +89,6 @@ public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskV
             descriptionTextView = itemView.findViewById(R.id.subTaskTextView);
             deleteButton = itemView.findViewById(R.id.deleteSubTaskButton);
 
-            // Удаление
             deleteButton.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION) {
@@ -94,18 +98,12 @@ public class SubTaskAdapter extends RecyclerView.Adapter<SubTaskAdapter.SubTaskV
         }
 
         public void bind(SubTask subTask) {
-            // 1) Отключаем временно листенер
             checkBox.setOnCheckedChangeListener(null);
-
-            // 2) Устанавливаем состояние
             checkBox.setChecked(subTask.isCompleted());
-
-            // 3) Возвращаем листенер
             checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION) {
-                    SubTask st = subTaskList.get(pos);
-                    updateSubTaskCompletion(st, isChecked);
+                    updateSubTaskCompletion(subTask, isChecked);
                 }
             });
 
