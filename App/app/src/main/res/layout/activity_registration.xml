@@ -8,28 +8,20 @@
     android:background="#281B28"
     tools:context=".ActivityRegistration">
 
-    <!-- Поле ввода: Email -->
-
-    <!-- Поле ввода: Name -->
-
-    <!-- Поле ввода: Password -->
-
-    <!-- Кнопка Registry -->
-
     <EditText
         android:id="@+id/NewEmail"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
         android:layout_marginTop="148dp"
-        android:ems="10"
         android:hint="Email"
         android:inputType="textEmailAddress"
         android:textAlignment="center"
         android:textColor="#FFFFFFFF"
-        android:textColorHint="#9E9E9E"
+        android:textColorHint="#B0B0B0"
         android:textSize="16sp"
+        android:padding="12dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -37,44 +29,47 @@
         android:id="@+id/NewName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="204dp"
-        android:ems="10"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="32dp"
         android:hint="Name"
         android:inputType="textPersonName"
         android:textAlignment="center"
         android:textColor="#FFFFFFFF"
-        android:textColorHint="#9E9E9E"
+        android:textColorHint="#B0B0B0"
         android:textSize="16sp"
+        android:padding="12dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/NewEmail" />
 
     <EditText
         android:id="@+id/NewPassword"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="260dp"
-        android:ems="10"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="32dp"
         android:hint="Password"
         android:inputType="textPassword"
         android:textAlignment="center"
         android:textColor="#FFFFFFFF"
-        android:textColorHint="#9E9E9E"
+        android:textColorHint="#B0B0B0"
         android:textSize="16sp"
+        android:padding="12dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/NewName" />
 
     <Button
         android:id="@+id/RegistryButt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="356dp"
-        android:text="Registry"
+        android:layout_marginTop="48dp"
+        android:text="Register"
+        android:backgroundTint="#FF4081"
+        android:textColor="@android:color/white"
+        android:paddingHorizontal="16dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/NewPassword" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

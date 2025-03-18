@@ -5,6 +5,7 @@ import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Context;
 import android.graphics.Paint;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -56,25 +57,29 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         progressUpdateCallback.run();
     }
 
-    private void removeTask(int position) {
-        // Проверяем валидность индекса
-        if (position < 0 || position >= taskList.size()) {
-            return; // Ничего не делаем, если индекс недействителен
+    public int getCompletedTaskCount() {
+        int count = 0;
+        for (Task task : taskList) {
+            if (task.isCompleted()) {
+                count++;
+            }
         }
+        return count;
+    }
 
-        // Получаем задачу по позиции
+    private void removeTask(int position) {
+        if (position < 0 || position >= taskList.size()) return;
         Task task = taskList.get(position);
-
-        // Удаляем задачу из Firestore
         db.collection("tasks").document(task.getId()).delete()
                 .addOnSuccessListener(aVoid -> {
-                    // Удаляем задачу из списка по её ID, а не по позиции
-                    taskList.removeIf(t -> t.getId().equals(task.getId()));
+                    taskList.remove(position);
                     notifyDataSetChanged();
                     progressUpdateCallback.run();
+                    Log.d("Firestore", "Задача удалена: " + task.getDescription());
                 })
                 .addOnFailureListener(e -> {
-                    Toast.makeText(context, "Ошибка удаления задачи: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Log.e("FirestoreError", "Ошибка удаления: " + e.getMessage());
+                    Toast.makeText(context, "Ошибка удаления задачи", Toast.LENGTH_SHORT).show();
                 });
     }
 
@@ -82,94 +87,17 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         task.setCompleted(isCompleted);
         db.collection("tasks").document(task.getId())
                 .update("isCompleted", isCompleted)
-                .addOnSuccessListener(aVoid -> progressUpdateCallback.run())
-                .addOnFailureListener(e -> {
-                    Toast.makeText(context, "Ошибка обновления статуса: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
+                .addOnSuccessListener(aVoid -> {
+                    notifyDataSetChanged();
+                    progressUpdateCallback.run();
+                })
+                .addOnFailureListener(e -> Toast.makeText(context, "Ошибка обновления статуса", Toast.LENGTH_SHORT).show());
     }
 
-    private void showEditTaskDialog(Task task) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_task, null);
-        builder.setView(dialogView);
-
-        EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
-        Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
-        Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
-        Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
-
-        addTaskButton.setText("Сохранить");
-
-        final Calendar calendar = Calendar.getInstance();
-        calendar.setTime(task.getDateTime());
-
-        taskDescription.setText(task.getDescription());
-        pickDateButton.setText(dateFormat.format(task.getDateTime()).split(" ")[0]);
-        pickTimeButton.setText(dateFormat.format(task.getDateTime()).split(" ")[1]);
-
-        pickDateButton.setOnClickListener(v -> {
-            DatePickerDialog datePickerDialog = new DatePickerDialog(
-                    context,
-                    (view, year, month, dayOfMonth) -> {
-                        calendar.set(year, month, dayOfMonth);
-                        pickDateButton.setText(dayOfMonth + "/" + (month + 1) + "/" + year);
-                    },
-                    calendar.get(Calendar.YEAR),
-                    calendar.get(Calendar.MONTH),
-                    calendar.get(Calendar.DAY_OF_MONTH)
-            );
-            datePickerDialog.show();
-        });
-
-        pickTimeButton.setOnClickListener(v -> {
-            TimePickerDialog timePickerDialog = new TimePickerDialog(
-                    context,
-                    (view, hourOfDay, minute) -> {
-                        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
-                        calendar.set(Calendar.MINUTE, minute);
-                        pickTimeButton.setText(hourOfDay + ":" + minute);
-                    },
-                    calendar.get(Calendar.HOUR_OF_DAY),
-                    calendar.get(Calendar.MINUTE),
-                    true
-            );
-            timePickerDialog.show();
-        });
-
-        AlertDialog dialog = builder.create();
-        addTaskButton.setOnClickListener(v -> {
-            String newDesc = taskDescription.getText().toString();
-            if (newDesc.isEmpty()) return;
-
-            Date newDate = calendar.getTime();
-            db.collection("tasks").document(task.getId())
-                    .update("description", newDesc, "dateTime", newDate)
-                    .addOnSuccessListener(aVoid -> {
-                        task.setDescription(newDesc);
-                        task.setDateTime(newDate);
-                        notifyDataSetChanged();
-                        progressUpdateCallback.run();
-                        dialog.dismiss();
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(context, "Ошибка редактирования: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
-        });
-        dialog.show();
-    }
-
-    public int getCompletedTaskCount() {
-        int count = 0;
-        for (Task t : taskList) {
-            if (t.isCompleted()) count++;
-        }
-        return count;
-    }
-
+    @NonNull
     @Override
     public TaskViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.task_item, parent, false);
+        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.task_item, parent, false);
         return new TaskViewHolder(v);
     }
 
@@ -194,7 +122,7 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         private final ImageButton addSubTaskButton;
         private final RecyclerView subTaskRecyclerView;
         private SubTaskAdapter subTaskAdapter;
-        private boolean isExpanded = false;
+        private List<SubTask> subTasks;
 
         public TaskViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -208,82 +136,141 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
 
             deleteButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    removeTask(position);
-                }
+                if (position != RecyclerView.NO_POSITION) removeTask(position);
             });
 
             editButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    Task t = taskList.get(position);
-                    showEditTaskDialog(t);
-                }
+                if (position != RecyclerView.NO_POSITION) showEditTaskDialog(taskList.get(position));
             });
 
             expandButton.setOnClickListener(v -> {
-                isExpanded = !isExpanded;
-                if (isExpanded) {
-                    expandButton.setImageResource(android.R.drawable.arrow_up_float);
-                    subTaskRecyclerView.setVisibility(View.VISIBLE);
-                    addSubTaskButton.setVisibility(View.VISIBLE);
-                } else {
-                    expandButton.setImageResource(android.R.drawable.arrow_down_float);
-                    subTaskRecyclerView.setVisibility(View.GONE);
-                    addSubTaskButton.setVisibility(View.GONE);
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    Task task = taskList.get(position);
+                    if (subTasks != null && !subTasks.isEmpty()) {
+                        task.setExpanded(!task.isExpanded());
+                        updateExpandedState(task);
+                        db.collection("tasks").document(task.getId())
+                                .update("isExpanded", task.isExpanded())
+                                .addOnSuccessListener(aVoid -> Log.d("Firestore", "Состояние isExpanded обновлено: " + task.isExpanded()))
+                                .addOnFailureListener(e -> Log.e("FirestoreError", "Ошибка обновления isExpanded: " + e.getMessage()));
+                    } else {
+                        Toast.makeText(context, "Нет подзадач для отображения", Toast.LENGTH_SHORT).show();
+                    }
                 }
             });
 
             addSubTaskButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    Task t = taskList.get(position);
-                    showAddSubTaskDialog(t);
-                }
+                if (position != RecyclerView.NO_POSITION) showAddSubTaskDialog(taskList.get(position));
             });
         }
 
         public void bind(Task task) {
             taskCheckBox.setOnCheckedChangeListener(null);
             taskCheckBox.setChecked(task.isCompleted());
-            taskCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    Task t = taskList.get(position);
-                    updateTaskCompletion(t, isChecked);
-                }
-            });
+            taskCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> updateTaskCompletion(task, isChecked));
 
             String dateTimeStr = dateFormat.format(task.getDateTime());
             taskTextView.setText(task.getDescription() + " (" + dateTimeStr + ")");
+            taskTextView.setPaintFlags(task.isCompleted() ? taskTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG : taskTextView.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
 
-            if (task.isCompleted()) {
-                taskTextView.setPaintFlags(taskTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-            } else {
-                taskTextView.setPaintFlags(taskTextView.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
-            }
-
-            List<SubTask> subTasks = new ArrayList<>();
+            subTasks = new ArrayList<>();
             subTaskAdapter = new SubTaskAdapter(subTasks, progressUpdateCallback, context, task.getId());
-            subTaskRecyclerView.setLayoutManager(new LinearLayoutManager(itemView.getContext()));
+            subTaskRecyclerView.setLayoutManager(new LinearLayoutManager(context));
             subTaskRecyclerView.setAdapter(subTaskAdapter);
 
+            // Загрузка подзадач
             db.collection("tasks").document(task.getId()).collection("subtasks")
-                    .addSnapshotListener((snapshots, e) -> {
-                        if (e != null) return;
-                        List<SubTask> updatedSubTasks = new ArrayList<>();
-                        for (QueryDocumentSnapshot doc : snapshots) {
+                    .get()
+                    .addOnSuccessListener(querySnapshot -> {
+                        subTasks.clear();
+                        for (QueryDocumentSnapshot doc : querySnapshot) {
                             SubTask st = doc.toObject(SubTask.class);
                             st.setSubTaskId(doc.getId());
-                            updatedSubTasks.add(st);
+                            subTasks.add(st);
                         }
-                        subTaskAdapter.setSubTasks(updatedSubTasks);
+                        subTaskAdapter.setSubTasks(subTasks);
+                        Log.d("Firestore", "Загружено подзадач: " + subTasks.size() + " для задачи: " + task.getDescription());
+                        updateButtonVisibility(task);
+                        updateExpandedState(task);
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e("FirestoreError", "Ошибка загрузки подзадач: " + e.getMessage());
+                        Toast.makeText(context, "Ошибка загрузки подзадач", Toast.LENGTH_SHORT).show();
                     });
+        }
 
-            subTaskRecyclerView.setVisibility(View.GONE);
-            addSubTaskButton.setVisibility(View.GONE);
-            expandButton.setImageResource(android.R.drawable.arrow_down_float);
-            isExpanded = false;
+        private void updateButtonVisibility(Task task) {
+            boolean hasSubtasks = subTasks != null && !subTasks.isEmpty();
+            expandButton.setVisibility(hasSubtasks ? View.VISIBLE : View.GONE);
+            editButton.setVisibility(View.VISIBLE);
+            deleteButton.setVisibility(View.VISIBLE);
+            addSubTaskButton.setVisibility(View.VISIBLE);
+            Log.d("TaskAdapter", "Задача: " + task.getDescription() + ", hasSubtasks: " + hasSubtasks + ", expandButton видима: " + (expandButton.getVisibility() == View.VISIBLE));
+        }
+
+        private void updateExpandedState(Task task) {
+            boolean hasSubtasks = subTasks != null && !subTasks.isEmpty();
+            if (hasSubtasks && task.isExpanded()) {
+                subTaskRecyclerView.setVisibility(View.VISIBLE);
+                expandButton.setImageResource(android.R.drawable.arrow_up_float);
+            } else {
+                subTaskRecyclerView.setVisibility(View.GONE);
+                expandButton.setImageResource(android.R.drawable.arrow_down_float);
+            }
+            Log.d("TaskAdapter", "Задача: " + task.getDescription() + ", isExpanded: " + task.isExpanded() + ", subTaskRecyclerView видима: " + (subTaskRecyclerView.getVisibility() == View.VISIBLE));
+        }
+
+        private void showEditTaskDialog(Task task) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(context);
+            View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_task, null);
+            builder.setView(dialogView);
+
+            EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
+            Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
+            Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
+            Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+
+            addTaskButton.setText("Сохранить");
+            taskDescription.setText(task.getDescription());
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(task.getDateTime());
+            pickDateButton.setText(dateFormat.format(task.getDateTime()).split(" ")[0]);
+            pickTimeButton.setText(dateFormat.format(task.getDateTime()).split(" ")[1]);
+
+            pickDateButton.setOnClickListener(v -> {
+                new DatePickerDialog(context, (view, year, month, day) -> {
+                    calendar.set(year, month, day);
+                    pickDateButton.setText(day + "/" + (month + 1) + "/" + year);
+                }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
+            });
+
+            pickTimeButton.setOnClickListener(v -> {
+                new TimePickerDialog(context, (view, hour, minute) -> {
+                    calendar.set(Calendar.HOUR_OF_DAY, hour);
+                    calendar.set(Calendar.MINUTE, minute);
+                    pickTimeButton.setText(hour + ":" + minute);
+                }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show();
+            });
+
+            AlertDialog dialog = builder.create();
+            addTaskButton.setOnClickListener(v -> {
+                String newDesc = taskDescription.getText().toString().trim();
+                if (newDesc.isEmpty()) return;
+                Date newDate = calendar.getTime();
+                db.collection("tasks").document(task.getId())
+                        .update("description", newDesc, "dateTime", newDate)
+                        .addOnSuccessListener(aVoid -> {
+                            task.setDescription(newDesc);
+                            task.setDateTime(newDate);
+                            notifyDataSetChanged();
+                            dialog.dismiss();
+                        })
+                        .addOnFailureListener(e -> Toast.makeText(context, "Ошибка редактирования", Toast.LENGTH_SHORT).show());
+            });
+            dialog.show();
         }
 
         private void showAddSubTaskDialog(Task task) {
@@ -302,21 +289,20 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
 
             AlertDialog dialog = builder.create();
             addTaskButton.setOnClickListener(v -> {
-                String description = taskDescription.getText().toString();
-                if (description.isEmpty()) {
-                    Toast.makeText(context, "Введите описание подзадачи", Toast.LENGTH_SHORT).show();
-                    return;
-                }
+                String description = taskDescription.getText().toString().trim();
+                if (description.isEmpty()) return;
                 Map<String, Object> subTask = new HashMap<>();
                 subTask.put("description", description);
                 subTask.put("isCompleted", false);
 
                 db.collection("tasks").document(task.getId()).collection("subtasks")
                         .add(subTask)
-                        .addOnSuccessListener(doc -> dialog.dismiss())
-                        .addOnFailureListener(e -> {
-                            Toast.makeText(context, "Ошибка добавления подзадачи: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        });
+                        .addOnSuccessListener(doc -> {
+                            task.setExpanded(true);
+                            dialog.dismiss();
+                            notifyItemChanged(getAdapterPosition());
+                        })
+                        .addOnFailureListener(e -> Toast.makeText(context, "Ошибка добавления подзадачи", Toast.LENGTH_SHORT).show());
             });
             dialog.show();
         }

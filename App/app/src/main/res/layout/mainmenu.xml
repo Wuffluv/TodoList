@@ -2,11 +2,9 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#281B28"
-    tools:context=".MainMenuActivity">
+    android:background="#1E1621">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -34,10 +32,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:textColor="@android:color/white"
+                android:textColor="#E0E0E0"
                 android:textSize="14sp"
                 android:text="Прогресс: 0%" />
-
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
@@ -45,9 +42,8 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:padding="16dp"
-            android:clipToPadding="false"
-            android:scrollbars="vertical" />
+            android:padding="8dp"
+            android:background="#281B28" />
     </LinearLayout>
 
     <com.google.android.material.bottomappbar.BottomAppBar
@@ -55,35 +51,27 @@
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:layout_gravity="bottom"
-        app:backgroundTint="@color/dark_gray"
-        app:fabAlignmentMode="center"
-        app:fabCradleMargin="8dp"
-        app:fabCradleRoundedCornerRadius="45dp"
-        app:fabCradleVerticalOffset="10dp"
-        app:hideOnScroll="false" />
+        app:backgroundTint="#281B28"
+        app:fabAlignmentMode="center" />
 
-    <!-- Существующий FAB по центру -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:contentDescription="@string/fab_desc"
-        android:src="@drawable/ic_launcher_foreground"
-        app:backgroundTint="@color/pink_500"
+        android:src="@android:drawable/ic_input_add"
+        app:backgroundTint="#FF4081"
         app:layout_anchor="@id/bottomAppBar"
         app:layout_anchorGravity="center"
-        app:tint="@color/white" />
+        app:tint="#FFFFFF" />
 
-    <!-- ВТОРАЯ кнопка (FAB) в правом нижнем углу -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_settings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:contentDescription="Открыть настройки"
         android:src="@android:drawable/ic_menu_manage"
-        app:backgroundTint="@color/dark_gray"
+        app:backgroundTint="#281B28"
         app:layout_anchor="@id/bottomAppBar"
         app:layout_anchorGravity="end"
-        app:tint="@android:color/white" />
+        app:tint="#FFFFFF" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

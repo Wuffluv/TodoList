@@ -1,36 +1,25 @@
 package com.example.todolist;
 
 import com.google.firebase.firestore.Exclude;
-
 import java.util.Date;
 
 public class Task {
-    private String id; // Для Firebase
-    private int taskId; // Для SQLite
-    private String userId; // Для Firebase
-    private int intUserId; // Для SQLite
+    private String id;
+    private String userId;
     private String description;
     private Date dateTime;
     private boolean isCompleted;
+    private boolean isExpanded = false;
 
     public Task() {
     }
 
-    // Конструктор для Firebase
     public Task(String userId, String description, Date dateTime) {
         this.userId = userId;
         this.description = description;
         this.dateTime = dateTime;
         this.isCompleted = false;
-    }
-
-    // Конструктор для SQLite
-    public Task(int taskId, int userId, String description, Date dateTime, boolean isCompleted) {
-        this.taskId = taskId;
-        this.intUserId = userId;
-        this.description = description;
-        this.dateTime = dateTime;
-        this.isCompleted = isCompleted;
+        this.isExpanded = false;
     }
 
     @Exclude
@@ -41,27 +30,11 @@ public class Task {
         this.id = id;
     }
 
-    @Exclude
-    public int getTaskId() {
-        return taskId;
-    }
-    public void setTaskId(int taskId) {
-        this.taskId = taskId;
-    }
-
     public String getUserId() {
         return userId;
     }
     public void setUserId(String userId) {
         this.userId = userId;
-    }
-
-    @Exclude
-    public int getIntUserId() {
-        return intUserId;
-    }
-    public void setIntUserId(int intUserId) {
-        this.intUserId = intUserId;
     }
 
     public String getDescription() {
@@ -83,5 +56,12 @@ public class Task {
     }
     public void setCompleted(boolean completed) {
         this.isCompleted = completed;
+    }
+
+    public boolean isExpanded() {
+        return isExpanded;
+    }
+    public void setExpanded(boolean expanded) {
+        this.isExpanded = expanded;
     }
 }

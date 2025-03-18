@@ -2,6 +2,7 @@ package com.example.todolist;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -45,6 +46,7 @@ public class ActivityRegistration extends AppCompatActivity {
                 return;
             }
 
+            Log.d("Auth", "Попытка регистрации с email: " + email);
             mAuth.createUserWithEmailAndPassword(email, password)
                     .addOnCompleteListener(this, task -> {
                         if (task.isSuccessful()) {
@@ -56,6 +58,7 @@ public class ActivityRegistration extends AppCompatActivity {
                             db.collection("users").document(user.getUid())
                                     .set(userData)
                                     .addOnSuccessListener(aVoid -> {
+                                        Log.d("Firestore", "Данные пользователя сохранены для UID: " + user.getUid());
                                         Toast.makeText(this, "Регистрация успешна!", Toast.LENGTH_SHORT).show();
                                         Intent intent = new Intent(ActivityRegistration.this, MainMenuActivity.class);
                                         intent.putExtra("USER_ID", user.getUid());
@@ -63,9 +66,11 @@ public class ActivityRegistration extends AppCompatActivity {
                                         finish();
                                     })
                                     .addOnFailureListener(e -> {
+                                        Log.e("FirestoreError", "Ошибка сохранения данных: " + e.getMessage());
                                         Toast.makeText(this, "Ошибка сохранения данных", Toast.LENGTH_SHORT).show();
                                     });
                         } else {
+                            Log.e("AuthError", "Ошибка регистрации: " + task.getException().getMessage());
                             Toast.makeText(this, "Ошибка регистрации", Toast.LENGTH_SHORT).show();
                         }
                     });

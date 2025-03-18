@@ -4,7 +4,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="8dp">
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp"
+    android:background="#4A3A4A">
 
     <CheckBox
         android:id="@+id/subTaskCheckBox"
@@ -19,22 +21,26 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:textColor="@android:color/white"
-        app:layout_constraintStart_toEndOf="@+id/subTaskCheckBox"
-        app:layout_constraintEnd_toStartOf="@+id/deleteSubTaskButton"
+        android:layout_marginEnd="8dp"
+        android:textColor="#E0E0E0"
+        android:textSize="14sp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        app:layout_constraintStart_toEndOf="@id/subTaskCheckBox"
+        app:layout_constraintEnd_toStartOf="@id/deleteSubTaskButton"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
     <ImageButton
         android:id="@+id/deleteSubTaskButton"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginEnd="8dp"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
         android:contentDescription="@string/delete_task"
-        android:src="@drawable/ic_close_24dp"
+        android:src="@android:drawable/ic_delete"
         android:background="?attr/selectableItemBackgroundBorderless"
         app:tint="@android:color/holo_red_light"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
