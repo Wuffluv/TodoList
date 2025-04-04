@@ -1,0 +1,9 @@
+<resources>
+    <style name="CalendarDateText" parent="android:TextAppearance.Medium">
+        <item name="android:textColor">#E0E0E0</item>
+    </style>
+
+    <style name="CalendarWeekDayText" parent="android:TextAppearance.Small">
+        <item name="android:textColor">#E0E0E0</item>
+    </style>
+</resources>
