@@ -28,6 +28,20 @@ public class MainActivity extends AppCompatActivity {
         // Инициализация экземпляра Firebase Auth
         mAuth = FirebaseAuth.getInstance();
 
+        // Проверка, авторизован ли пользователь
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null) {
+            // Если пользователь уже авторизован
+            Log.d("Auth", "Пользователь уже авторизован, UID: " + currentUser.getUid());
+            // Создание намерения для перехода в главное меню
+            Intent intent = new Intent(MainActivity.this, MainMenuActivity.class);
+            intent.putExtra("USER_ID", currentUser.getUid()); // Передача ID пользователя
+            startActivity(intent); // Запуск MainMenuActivity
+            finish(); // Завершение текущей активности, чтобы не возвращаться назад
+            return; // Прерываем выполнение onCreate
+        }
+
+        // Если пользователь не авторизован, инициализируем интерфейс входа
         // Привязка элементов интерфейса к переменным
         enterEmail = findViewById(R.id.EnterEmail);       // Поле ввода email
         enterPassword = findViewById(R.id.EnterPassword); // Поле ввода пароля
@@ -36,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Установка слушателя нажатия на кнопку входа
         loginButton.setOnClickListener(v -> {
-            // Получение введенных данных и удаление лишних пробелов
+            // Получение введённых данных и удаление лишних пробелов
             String email = enterEmail.getText().toString().trim();
             String password = enterPassword.getText().toString().trim();
 
