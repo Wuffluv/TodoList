@@ -1,10 +1,12 @@
 package com.example.todolist;
 
-import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Context;
 import android.graphics.Paint;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,12 +19,16 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.DialogFragment;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
+import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -33,321 +39,797 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
-// Адаптер для отображения списка задач в RecyclerView
-public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder> {
-
-    // Список задач
+public class TaskAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+    private static final String TAG = "TaskAdapter";
+    private List<Object> items = new ArrayList<>();
     private List<Task> taskList;
-    // Callback для обновления прогресс-бара
     private final Runnable progressUpdateCallback;
-    // Формат даты и времени для отображения
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
-    // Контекст активности
-    private final Context context;
-    // Экземпляр Firestore для работы с базой данных
+    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
+    private static final SimpleDateFormat headerDateFormat = new SimpleDateFormat("d MMMM", Locale.getDefault());
+    private final WeakReference<Context> contextRef;
     private final FirebaseFirestore db;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private boolean isGroupedView = false;
 
-    // Конструктор адаптера
+    private static final int TYPE_HEADER = 0;
+    private static final int TYPE_ITEM = 1;
+
     public TaskAdapter(List<Task> tasks, Runnable progressUpdateCallback, Context context) {
-        // Инициализация списка задач с проверкой на null
-        this.taskList = tasks != null ? tasks : new ArrayList<>();
-        this.progressUpdateCallback = progressUpdateCallback; // Callback для обновления прогресса
-        this.context = context; // Контекст для Toast и диалогов
-        this.db = FirebaseFirestore.getInstance(); // Инициализация Firestore
-        // Сортировка задач по дате и времени
-        Collections.sort(taskList, Comparator.comparing(Task::getDateTime));
+        this.taskList = tasks != null ? new ArrayList<>(tasks) : new ArrayList<>();
+        this.items = new ArrayList<>(this.taskList);
+        this.progressUpdateCallback = progressUpdateCallback;
+        this.contextRef = new WeakReference<>(context);
+        this.db = FirebaseFirestore.getInstance();
+        Collections.sort(taskList, (task1, task2) -> {
+            if (task1.getDateTime() == null && task2.getDateTime() == null) return 0;
+            if (task1.getDateTime() == null) return -1;
+            if (task2.getDateTime() == null) return 1;
+            return task1.getDateTime().compareTo(task2.getDateTime());
+        });
     }
 
-    // Метод для обновления списка задач
+    public boolean isGroupedView() {
+        return isGroupedView;
+    }
+
     public void setTasks(List<Task> tasks) {
-        this.taskList = tasks != null ? tasks : new ArrayList<>(); // Установка нового списка с проверкой на null
-        Collections.sort(taskList, Comparator.comparing(Task::getDateTime)); // Сортировка задач
-        notifyDataSetChanged(); // Уведомление об изменении данных
-        progressUpdateCallback.run(); // Обновление прогресса
+        try {
+            Log.d(TAG, "setTasks called with " + (tasks != null ? tasks.size() : 0) + " tasks");
+            List<Task> oldList = new ArrayList<>(this.taskList);
+            this.taskList = tasks != null ? new ArrayList<>(tasks) : new ArrayList<>();
+            this.items = new ArrayList<>(this.taskList);
+            Collections.sort(taskList, (task1, task2) -> {
+                if (task1.getDateTime() == null && task2.getDateTime() == null) return 0;
+                if (task1.getDateTime() == null) return -1;
+                if (task2.getDateTime() == null) return 1;
+                return task1.getDateTime().compareTo(task2.getDateTime());
+            });
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new TaskDiffCallback(oldList, taskList));
+            diffResult.dispatchUpdatesTo(this);
+            isGroupedView = false;
+            if (progressUpdateCallback != null) {
+                progressUpdateCallback.run();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка при установке задач: " + e.getMessage(), e);
+            showToast("Ошибка загрузки задач");
+        }
     }
 
-    // Метод для подсчёта выполненных задач
+    public void setGroupedTasks(List<Task> tasks) {
+        try {
+            Log.d(TAG, "setGroupedTasks called with " + (tasks != null ? tasks.size() : 0) + " tasks");
+            this.taskList = tasks != null ? new ArrayList<>(tasks) : new ArrayList<>();
+            Collections.sort(taskList, (task1, task2) -> {
+                if (task1.getDateTime() == null && task2.getDateTime() == null) return 0;
+                if (task1.getDateTime() == null) return -1;
+                if (task2.getDateTime() == null) return 1;
+                return task1.getDateTime().compareTo(task2.getDateTime());
+            });
+
+            Map<String, List<Task>> groupedTasks = new HashMap<>();
+            for (Task task : taskList) {
+                if (task.getDateTime() == null) {
+                    Log.e(TAG, "Task dateTime is null for task: " + task.getDescription());
+                    continue;
+                }
+                String dateKey = headerDateFormat.format(task.getDateTime());
+                groupedTasks.computeIfAbsent(dateKey, k -> new ArrayList<>()).add(task);
+            }
+
+            List<Object> newItems = new ArrayList<>();
+            for (Map.Entry<String, List<Task>> entry : groupedTasks.entrySet()) {
+                String date = entry.getKey();
+                newItems.add("Задачи на " + date);
+                newItems.addAll(entry.getValue());
+            }
+
+            this.items = newItems;
+            isGroupedView = true;
+            notifyDataSetChanged();
+            if (progressUpdateCallback != null) {
+                progressUpdateCallback.run();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка при установке сгруппированных задач: " + e.getMessage(), e);
+            showToast("Ошибка загрузки задач");
+        }
+    }
+
     public int getCompletedTaskCount() {
         int count = 0;
         for (Task task : taskList) {
-            if (task.isCompleted()) {
-                count++; // Увеличение счётчика для выполненных задач
+            if (task != null && task.isCompleted()) {
+                count++;
             }
         }
         return count;
     }
 
-    // Метод для удаления задачи
     private void removeTask(int position) {
-        if (position < 0 || position >= taskList.size()) return; // Проверка валидности позиции
-        Task task = taskList.get(position); // Получение задачи для удаления
-        // Удаление задачи из Firestore
-        db.collection("tasks").document(task.getId()).delete()
-                .addOnSuccessListener(aVoid -> {
-                    taskList.remove(position); // Удаление из локального списка
-                    notifyDataSetChanged(); // Уведомление об изменении данных
-                    progressUpdateCallback.run(); // Обновление прогресса
-                    Log.d("Firestore", "Задача удалена: " + task.getDescription());
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("FirestoreError", "Ошибка удаления: " + e.getMessage());
-                    Toast.makeText(context, "Ошибка удаления задачи", Toast.LENGTH_SHORT).show();
-                });
-    }
+        try {
+            Object item = items.get(position);
+            if (!(item instanceof Task)) return;
 
-    // Метод для обновления статуса выполнения задачи
-    private void updateTaskCompletion(Task task, boolean isCompleted) {
-        task.setCompleted(isCompleted); // Локальное обновление статуса
-        // Обновление статуса в Firestore
-        db.collection("tasks").document(task.getId())
-                .update("isCompleted", isCompleted)
-                .addOnSuccessListener(aVoid -> {
-                    notifyDataSetChanged(); // Уведомление об изменении данных
-                    progressUpdateCallback.run(); // Обновление прогресса
-                })
-                .addOnFailureListener(e -> Toast.makeText(context, "Ошибка обновления статуса", Toast.LENGTH_SHORT).show());
-    }
+            Task task = (Task) item;
+            int taskIndex = taskList.indexOf(task);
+            if (taskIndex < 0 || taskIndex >= taskList.size()) {
+                Log.e(TAG, "Invalid task index: " + taskIndex);
+                return;
+            }
+            if (task == null || task.getId() == null) {
+                Log.e(TAG, "Задача или её ID равны null на позиции: " + position);
+                return;
+            }
 
-    // Создание нового ViewHolder для задачи
-    @NonNull
-    @Override
-    public TaskViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        // Надувание макета элемента задачи
-        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.task_item, parent, false);
-        return new TaskViewHolder(v); // Возврат нового ViewHolder
-    }
-
-    // Привязка данных задачи к ViewHolder
-    @Override
-    public void onBindViewHolder(@NonNull TaskViewHolder holder, int position) {
-        Task task = taskList.get(position); // Получение задачи по позиции
-        holder.bind(task); // Привязка данных к ViewHolder
-    }
-
-    // Возвращает общее количество задач
-    @Override
-    public int getItemCount() {
-        return taskList.size();
-    }
-
-    // Внутренний класс ViewHolder для элементов задачи
-    class TaskViewHolder extends RecyclerView.ViewHolder {
-        private final TextView taskTextView; // Текст задачи
-        private final CheckBox taskCheckBox; // Чекбокс выполнения
-        private final ImageButton deleteButton; // Кнопка удаления
-        private final ImageButton editButton; // Кнопка редактирования
-        private final ImageButton expandButton; // Кнопка раскрытия подзадач
-        private final ImageButton addSubTaskButton; // Кнопка добавления подзадачи
-        private final RecyclerView subTaskRecyclerView; // RecyclerView для подзадач
-        private SubTaskAdapter subTaskAdapter; // Адаптер для подзадач
-        private List<SubTask> subTasks; // Список подзадач
-
-        // Конструктор ViewHolder
-        public TaskViewHolder(@NonNull View itemView) {
-            super(itemView);
-            // Привязка элементов интерфейса к переменным
-            taskTextView = itemView.findViewById(R.id.taskTextView);
-            taskCheckBox = itemView.findViewById(R.id.taskCheckBox);
-            deleteButton = itemView.findViewById(R.id.deleteButton);
-            editButton = itemView.findViewById(R.id.editButton);
-            expandButton = itemView.findViewById(R.id.expandButton);
-            addSubTaskButton = itemView.findViewById(R.id.addSubTaskButton);
-            subTaskRecyclerView = itemView.findViewById(R.id.subTaskRecyclerView);
-
-            // Слушатель для кнопки удаления
-            deleteButton.setOnClickListener(v -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) removeTask(position);
-            });
-
-            // Слушатель для кнопки редактирования
-            editButton.setOnClickListener(v -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) showEditTaskDialog(taskList.get(position));
-            });
-
-            // Слушатель для кнопки раскрытия/сворачивания подзадач
-            expandButton.setOnClickListener(v -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    Task task = taskList.get(position);
-                    if (subTasks != null && !subTasks.isEmpty()) {
-                        task.setExpanded(!task.isExpanded()); // Переключение состояния раскрытия
-                        updateExpandedState(task); // Обновление видимости подзадач
-                        // Обновление состояния в Firestore
-                        db.collection("tasks").document(task.getId())
-                                .update("isExpanded", task.isExpanded())
-                                .addOnSuccessListener(aVoid -> Log.d("Firestore", "Состояние isExpanded обновлено: " + task.isExpanded()))
-                                .addOnFailureListener(e -> Log.e("FirestoreError", "Ошибка обновления isExpanded: " + e.getMessage()));
-                    } else {
-                        Toast.makeText(context, "Нет подзадач для отображения", Toast.LENGTH_SHORT).show();
-                    }
+            Executors.newSingleThreadExecutor().execute(() -> {
+                try {
+                    db.collection("tasks").document(task.getId()).delete()
+                            .addOnSuccessListener(aVoid -> uiHandler.post(() -> {
+                                try {
+                                    taskList.remove(taskIndex);
+                                    if (isGroupedView) {
+                                        setGroupedTasks(taskList);
+                                    } else {
+                                        setTasks(taskList);
+                                    }
+                                    if (progressUpdateCallback != null) {
+                                        progressUpdateCallback.run();
+                                    }
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Ошибка при удалении задачи из списка: " + e.getMessage(), e);
+                                    showToast("Ошибка удаления задачи");
+                                }
+                            }))
+                            .addOnFailureListener(e -> uiHandler.post(() ->
+                                    showToast("Ошибка удаления задачи: " + e.getMessage())));
+                } catch (Exception e) {
+                    Log.e(TAG, "Ошибка удаления задачи: " + e.getMessage(), e);
+                    uiHandler.post(() -> showToast("Ошибка удаления задачи"));
                 }
             });
-
-            // Слушатель для кнопки добавления подзадачи
-            addSubTaskButton.setOnClickListener(v -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) showAddSubTaskDialog(taskList.get(position));
-            });
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка при удалении задачи на позиции " + position + ": " + e.getMessage(), e);
+            showToast("Ошибка удаления задачи");
         }
+    }
 
-        // Привязка данных задачи к элементам интерфейса
-        public void bind(Task task) {
-            taskCheckBox.setOnCheckedChangeListener(null); // Сброс слушателя
-            taskCheckBox.setChecked(task.isCompleted()); // Установка статуса выполнения
-            // Установка слушателя для обновления статуса
-            taskCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> updateTaskCompletion(task, isChecked));
-
-            // Форматирование текста задачи с датой
-            String dateTimeStr = dateFormat.format(task.getDateTime());
-            taskTextView.setText(task.getDescription() + " (" + dateTimeStr + ")");
-            // Применение зачёркивания текста, если задача выполнена
-            taskTextView.setPaintFlags(task.isCompleted() ? taskTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG : taskTextView.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
-
-            subTasks = new ArrayList<>(); // Инициализация списка подзадач
-            subTaskAdapter = new SubTaskAdapter(subTasks, progressUpdateCallback, context, task.getId()); // Создание адаптера подзадач
-            subTaskRecyclerView.setLayoutManager(new LinearLayoutManager(context)); // Установка менеджера макета
-            subTaskRecyclerView.setAdapter(subTaskAdapter); // Установка адаптера
-
-            // Загрузка подзадач из Firestore
-            db.collection("tasks").document(task.getId()).collection("subtasks")
-                    .get()
-                    .addOnSuccessListener(querySnapshot -> {
-                        subTasks.clear(); // Очистка текущего списка подзадач
-                        for (QueryDocumentSnapshot doc : querySnapshot) {
-                            SubTask st = doc.toObject(SubTask.class); // Преобразование документа в объект SubTask
-                            st.setSubTaskId(doc.getId()); // Установка ID подзадачи
-                            subTasks.add(st); // Добавление в список
-                        }
-                        subTaskAdapter.setSubTasks(subTasks); // Обновление адаптера подзадач
-                        Log.d("Firestore", "Загружено подзадач: " + subTasks.size() + " для задачи: " + task.getDescription());
-                        updateButtonVisibility(task); // Обновление видимости кнопок
-                        updateExpandedState(task); // Обновление состояния раскрытия
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e("FirestoreError", "Ошибка загрузки подзадач: " + e.getMessage());
-                        Toast.makeText(context, "Ошибка загрузки подзадач", Toast.LENGTH_SHORT).show();
-                    });
-        }
-
-        // Обновление видимости кнопок в зависимости от наличия подзадач
-        private void updateButtonVisibility(Task task) {
-            boolean hasSubtasks = subTasks != null && !subTasks.isEmpty();
-            expandButton.setVisibility(hasSubtasks ? View.VISIBLE : View.GONE); // Показ кнопки раскрытия, если есть подзадачи
-            editButton.setVisibility(View.VISIBLE); // Кнопка редактирования всегда видима
-            deleteButton.setVisibility(View.VISIBLE); // Кнопка удаления всегда видима
-            addSubTaskButton.setVisibility(View.VISIBLE); // Кнопка добавления подзадачи всегда видима
-            Log.d("TaskAdapter", "Задача: " + task.getDescription() + ", hasSubtasks: " + hasSubtasks + ", expandButton видима: " + (expandButton.getVisibility() == View.VISIBLE));
-        }
-
-        // Обновление состояния раскрытия подзадач
-        private void updateExpandedState(Task task) {
-            boolean hasSubtasks = subTasks != null && !subTasks.isEmpty();
-            if (hasSubtasks && task.isExpanded()) {
-                subTaskRecyclerView.setVisibility(View.VISIBLE); // Показ подзадач
-                expandButton.setImageResource(android.R.drawable.arrow_up_float); // Иконка "свернуть"
-            } else {
-                subTaskRecyclerView.setVisibility(View.GONE); // Скрытие подзадач
-                expandButton.setImageResource(android.R.drawable.arrow_down_float); // Иконка "раскрыть"
+    private void updateTaskCompletion(Task task, boolean isCompleted) {
+        try {
+            if (task == null || task.getId() == null) {
+                Log.e(TAG, "Задача или её ID равны null при обновлении статуса");
+                return;
             }
-            Log.d("TaskAdapter", "Задача: " + task.getDescription() + ", isExpanded: " + task.isExpanded() + ", subTaskRecyclerView видима: " + (subTaskRecyclerView.getVisibility() == View.VISIBLE));
+            task.setCompleted(isCompleted);
+            Executors.newSingleThreadExecutor().execute(() -> {
+                try {
+                    db.collection("tasks").document(task.getId())
+                            .update("isCompleted", isCompleted)
+                            .addOnSuccessListener(aVoid -> uiHandler.post(() -> {
+                                try {
+                                    if (isGroupedView) {
+                                        setGroupedTasks(taskList);
+                                    } else {
+                                        notifyDataSetChanged();
+                                    }
+                                    if (progressUpdateCallback != null) {
+                                        progressUpdateCallback.run();
+                                    }
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Ошибка при обновлении UI после изменения статуса: " + e.getMessage(), e);
+                                    showToast("Ошибка обновления статуса");
+                                }
+                            }))
+                            .addOnFailureListener(e -> uiHandler.post(() ->
+                                    showToast("Ошибка обновления статуса: " + e.getMessage())));
+                } catch (Exception e) {
+                    Log.e(TAG, "Ошибка обновления статуса задачи: " + e.getMessage(), e);
+                    uiHandler.post(() -> showToast("Ошибка обновления статуса"));
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка при обновлении статуса задачи: " + e.getMessage(), e);
+            showToast("Ошибка обновления статуса");
+        }
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        return items.get(position) instanceof String ? TYPE_HEADER : TYPE_ITEM;
+    }
+
+    @NonNull
+    @Override
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        try {
+            if (viewType == TYPE_HEADER) {
+                View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.date_header, parent, false);
+                return new HeaderViewHolder(v);
+            } else {
+                View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.task_item, parent, false);
+                return new TaskViewHolder(v);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка создания ViewHolder: " + e.getMessage(), e);
+            throw new RuntimeException("Не удалось создать ViewHolder", e);
+        }
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        try {
+            Object item = items.get(position);
+            if (holder instanceof HeaderViewHolder) {
+                ((HeaderViewHolder) holder).bind((String) item);
+            } else {
+                ((TaskViewHolder) holder).bind((Task) item);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка при привязке данных на позиции " + position + ": " + e.getMessage(), e);
+            showToast("Ошибка отображения задачи");
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return items != null ? items.size() : 0;
+    }
+
+    static class HeaderViewHolder extends RecyclerView.ViewHolder {
+        private final TextView headerTextView;
+
+        HeaderViewHolder(View itemView) {
+            super(itemView);
+            headerTextView = itemView.findViewById(R.id.headerText);
         }
 
-        // Показ диалога редактирования задачи
-        private void showEditTaskDialog(Task task) {
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_task, null); // Надувание макета диалога
-            builder.setView(dialogView);
+        void bind(String header) {
+            headerTextView.setText(header);
+        }
+    }
 
-            // Привязка элементов диалога
-            EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
-            Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
-            Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
-            Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+    class TaskViewHolder extends RecyclerView.ViewHolder {
+        private final TextView taskTextView;
+        private final CheckBox taskCheckBox;
+        private final ImageButton deleteButton;
+        private final ImageButton editButton;
+        private final ImageButton expandButton;
+        private final ImageButton addSubTaskButton;
+        private final RecyclerView subTaskRecyclerView;
+        private SubTaskAdapter subTaskAdapter;
+        private List<SubTask> subTasks;
 
-            addTaskButton.setText("Сохранить"); // Изменение текста кнопки
-            taskDescription.setText(task.getDescription()); // Установка текущего описания
-            Calendar calendar = Calendar.getInstance();
-            calendar.setTime(task.getDateTime()); // Установка текущей даты и времени
-            pickDateButton.setText(dateFormat.format(task.getDateTime()).split(" ")[0]); // Установка даты
-            pickTimeButton.setText(dateFormat.format(task.getDateTime()).split(" ")[1]); // Установка времени
+        public TaskViewHolder(@NonNull View itemView) {
+            super(itemView);
+            try {
+                taskTextView = itemView.findViewById(R.id.taskTextView);
+                taskCheckBox = itemView.findViewById(R.id.taskCheckBox);
+                deleteButton = itemView.findViewById(R.id.deleteButton);
+                editButton = itemView.findViewById(R.id.editButton);
+                expandButton = itemView.findViewById(R.id.expandButton);
+                addSubTaskButton = itemView.findViewById(R.id.addSubTaskButton);
+                subTaskRecyclerView = itemView.findViewById(R.id.subTaskRecyclerView);
 
-            // Слушатель для выбора даты
-            pickDateButton.setOnClickListener(v -> {
-                new DatePickerDialog(context, (view, year, month, day) -> {
-                    calendar.set(year, month, day); // Установка новой даты
-                    pickDateButton.setText(day + "/" + (month + 1) + "/" + year); // Обновление текста кнопки
-                }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
-            });
+                deleteButton.setOnClickListener(v -> {
+                    int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION) removeTask(position);
+                });
 
-            // Слушатель для выбора времени
-            pickTimeButton.setOnClickListener(v -> {
-                new TimePickerDialog(context, (view, hour, minute) -> {
-                    calendar.set(Calendar.HOUR_OF_DAY, hour); // Установка часов
-                    calendar.set(Calendar.MINUTE, minute); // Установка минут
-                    pickTimeButton.setText(hour + ":" + minute); // Обновление текста кнопки
-                }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show();
-            });
+                editButton.setOnClickListener(v -> {
+                    int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION) {
+                        try {
+                            Object item = items.get(position);
+                            if (item instanceof Task) {
+                                Task task = (Task) item;
+                                EditTaskDialogFragment dialog = EditTaskDialogFragment.newInstance(task, position, TaskAdapter.this);
+                                dialog.show(((AppCompatActivity) contextRef.get()).getSupportFragmentManager(), "EditTaskDialog");
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Ошибка открытия диалога редактирования: " + e.getMessage(), e);
+                            showToast("Ошибка открытия диалога редактирования");
+                        }
+                    }
+                });
 
-            AlertDialog dialog = builder.create();
-            // Слушатель для сохранения изменений
-            addTaskButton.setOnClickListener(v -> {
-                String newDesc = taskDescription.getText().toString().trim();
-                if (newDesc.isEmpty()) return; // Проверка на пустое описание
-                Date newDate = calendar.getTime(); // Получение новой даты
-                // Обновление задачи в Firestore
-                db.collection("tasks").document(task.getId())
-                        .update("description", newDesc, "dateTime", newDate)
-                        .addOnSuccessListener(aVoid -> {
-                            task.setDescription(newDesc); // Локальное обновление описания
-                            task.setDateTime(newDate); // Локальное обновление даты
-                            notifyDataSetChanged(); // Уведомление об изменении данных
-                            dialog.dismiss(); // Закрытие диалога
-                        })
-                        .addOnFailureListener(e -> Toast.makeText(context, "Ошибка редактирования", Toast.LENGTH_SHORT).show());
-            });
-            dialog.show(); // Показ диалога
+                expandButton.setOnClickListener(v -> {
+                    int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION) {
+                        Object item = items.get(position);
+                        if (item instanceof Task) {
+                            Task task = (Task) item;
+                            if (subTasks != null && !subTasks.isEmpty()) {
+                                task.setExpanded(!task.isExpanded());
+                                updateExpandedState(task);
+                                Executors.newSingleThreadExecutor().execute(() -> {
+                                    try {
+                                        db.collection("tasks").document(task.getId())
+                                                .update("isExpanded", task.isExpanded());
+                                    } catch (Exception e) {
+                                        Log.e(TAG, "Ошибка обновления isExpanded: " + e.getMessage(), e);
+                                    }
+                                });
+                            } else {
+                                showToast("Нет подзадач для отображения");
+                            }
+                        }
+                    }
+                });
+
+                addSubTaskButton.setOnClickListener(v -> {
+                    int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION) {
+                        try {
+                            Object item = items.get(position);
+                            if (item instanceof Task) {
+                                Task task = (Task) item;
+                                AddSubTaskDialogFragment dialog = AddSubTaskDialogFragment.newInstance(task, position, TaskAdapter.this);
+                                dialog.show(((AppCompatActivity) contextRef.get()).getSupportFragmentManager(), "AddSubTaskDialog");
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Ошибка открытия диалога добавления подзадачи: " + e.getMessage(), e);
+                            showToast("Ошибка открытия диалога добавления подзадачи");
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка инициализации ViewHolder: " + e.getMessage(), e);
+                throw new RuntimeException("Не удалось инициализировать ViewHolder", e);
+            }
         }
 
-        // Показ диалога добавления подзадачи
-        private void showAddSubTaskDialog(Task task) {
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_task, null); // Надувание макета диалога
-            builder.setView(dialogView);
+        public void bind(Task task) {
+            try {
+                taskCheckBox.setOnCheckedChangeListener(null);
+                taskCheckBox.setChecked(task.isCompleted());
+                taskCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> updateTaskCompletion(task, isChecked));
 
-            // Привязка элементов диалога
-            EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
-            Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
-            Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
-            Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+                if (task.getDateTime() == null) {
+                    Log.e(TAG, "Task dateTime is null for task: " + task.getDescription());
+                    taskTextView.setText(task.getDescription() + " (Дата не указана)");
+                } else {
+                    String dateTimeStr = dateFormat.format(task.getDateTime());
+                    taskTextView.setText(task.getDescription() + " (" + dateTimeStr + ")");
+                }
+                taskTextView.setPaintFlags(task.isCompleted() ? taskTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG : taskTextView.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
 
-            pickDateButton.setVisibility(View.GONE); // Скрытие кнопки выбора даты
-            pickTimeButton.setVisibility(View.GONE); // Скрытие кнопки выбора времени
-            addTaskButton.setText("Добавить подзадачу"); // Изменение текста кнопки
+                subTasks = new ArrayList<>();
+                subTaskAdapter = new SubTaskAdapter(subTasks, progressUpdateCallback, contextRef.get(), task.getId());
+                subTaskRecyclerView.setLayoutManager(new LinearLayoutManager(contextRef.get()));
+                subTaskRecyclerView.setAdapter(subTaskAdapter);
 
-            AlertDialog dialog = builder.create();
-            // Слушатель для добавления подзадачи
-            addTaskButton.setOnClickListener(v -> {
-                String description = taskDescription.getText().toString().trim();
-                if (description.isEmpty()) return; // Проверка на пустое описание
-                // Создание объекта подзадачи
-                Map<String, Object> subTask = new HashMap<>();
-                subTask.put("description", description); // Установка описания
-                subTask.put("isCompleted", false); // Установка начального статуса
+                if (!task.isSubTasksLoaded() && task.isExpanded()) {
+                    loadSubTasks(task);
+                } else {
+                    updateButtonVisibility(task);
+                    updateExpandedState(task);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка привязки данных задачи: " + e.getMessage(), e);
+                showToast("Ошибка отображения задачи");
+            }
+        }
 
-                // Добавление подзадачи в Firestore
-                db.collection("tasks").document(task.getId()).collection("subtasks")
-                        .add(subTask)
-                        .addOnSuccessListener(doc -> {
-                            task.setExpanded(true); // Автоматическое раскрытие задачи
-                            dialog.dismiss(); // Закрытие диалога
-                            notifyItemChanged(getAdapterPosition()); // Уведомление об изменении элемента
-                        })
-                        .addOnFailureListener(e -> Toast.makeText(context, "Ошибка добавления подзадачи", Toast.LENGTH_SHORT).show());
+        private void loadSubTasks(Task task) {
+            Executors.newSingleThreadExecutor().execute(() -> {
+                try {
+                    db.collection("tasks").document(task.getId()).collection("subtasks")
+                            .get()
+                            .addOnSuccessListener(querySnapshot -> {
+                                List<SubTask> loadedSubTasks = new ArrayList<>();
+                                for (QueryDocumentSnapshot doc : querySnapshot) {
+                                    SubTask st = doc.toObject(SubTask.class);
+                                    st.setSubTaskId(doc.getId());
+                                    loadedSubTasks.add(st);
+                                }
+                                uiHandler.post(() -> {
+                                    try {
+                                        subTasks.clear();
+                                        subTasks.addAll(loadedSubTasks);
+                                        subTaskAdapter.setSubTasks(subTasks);
+                                        task.setSubTasksLoaded(true);
+                                        updateButtonVisibility(task);
+                                        updateExpandedState(task);
+                                    } catch (Exception e) {
+                                        Log.e(TAG, "Ошибка обновления подзадач: " + e.getMessage(), e);
+                                        showToast("Ошибка обновления подзадач");
+                                    }
+                                });
+                            })
+                            .addOnFailureListener(e -> uiHandler.post(() ->
+                                    showToast("Ошибка загрузки подзадач: " + e.getMessage())));
+                } catch (Exception e) {
+                    Log.e(TAG, "Ошибка загрузки подзадач: " + e.getMessage(), e);
+                    uiHandler.post(() -> showToast("Ошибка загрузки подзадач"));
+                }
             });
-            dialog.show(); // Показ диалога
+        }
+
+        private void updateButtonVisibility(Task task) {
+            try {
+                boolean hasSubtasks = subTasks != null && !subTasks.isEmpty();
+                expandButton.setVisibility(hasSubtasks ? View.VISIBLE : View.GONE);
+                editButton.setVisibility(View.VISIBLE);
+                deleteButton.setVisibility(View.VISIBLE);
+                addSubTaskButton.setVisibility(View.VISIBLE);
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка обновления видимости кнопок: " + e.getMessage(), e);
+            }
+        }
+
+        private void updateExpandedState(Task task) {
+            try {
+                boolean hasSubtasks = subTasks != null && !subTasks.isEmpty();
+                if (hasSubtasks && task.isExpanded()) {
+                    subTaskRecyclerView.setVisibility(View.VISIBLE);
+                    expandButton.setImageResource(android.R.drawable.arrow_up_float);
+                } else {
+                    subTaskRecyclerView.setVisibility(View.GONE);
+                    expandButton.setImageResource(android.R.drawable.arrow_down_float);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка обновления состояния раскрытия: " + e.getMessage(), e);
+            }
+        }
+    }
+
+    public static class EditTaskDialogFragment extends DialogFragment {
+        private Task task;
+        private int position;
+        private TaskAdapter adapter;
+
+        public static EditTaskDialogFragment newInstance(Task task, int position, TaskAdapter adapter) {
+            EditTaskDialogFragment fragment = new EditTaskDialogFragment();
+            fragment.task = task;
+            fragment.position = position;
+            fragment.adapter = adapter;
+            return fragment;
+        }
+
+        @NonNull
+        @Override
+        public android.app.Dialog onCreateDialog(@NonNull Bundle savedInstanceState) {
+            try {
+                androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(requireActivity());
+                View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_add_task, null);
+                builder.setView(dialogView);
+
+                EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
+                Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
+                Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
+                Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+
+                addTaskButton.setText("Сохранить");
+                taskDescription.setText(task.getDescription());
+                Calendar calendar = Calendar.getInstance();
+                if (task.getDateTime() != null) {
+                    calendar.setTime(task.getDateTime());
+                }
+                String dateTimeString = dateFormat.format(calendar.getTime());
+                pickDateButton.setText(dateTimeString.split(" ")[0]);
+                pickTimeButton.setText(dateTimeString.split(" ")[1]);
+
+                pickDateButton.setOnClickListener(v -> new DatePickerDialog(getContext(),
+                        (view, year, month, day) -> {
+                            calendar.set(year, month, day);
+                            pickDateButton.setText(day + "/" + (month + 1) + "/" + year);
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)).show());
+
+                pickTimeButton.setOnClickListener(v -> new TimePickerDialog(getContext(),
+                        (view, hour, minute) -> {
+                            calendar.set(Calendar.HOUR_OF_DAY, hour);
+                            calendar.set(Calendar.MINUTE, minute);
+                            pickTimeButton.setText(String.format(Locale.getDefault(), "%02d:%02d", hour, minute));
+                        },
+                        calendar.get(Calendar.HOUR_OF_DAY),
+                        calendar.get(Calendar.MINUTE),
+                        true).show());
+
+                addTaskButton.setOnClickListener(v -> {
+                    try {
+                        String newDesc = taskDescription.getText().toString().trim();
+                        if (newDesc.isEmpty()) {
+                            Toast.makeText(getContext(), "Введите описание задачи", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        Date newDate = calendar.getTime();
+                        FirebaseFirestore db = FirebaseFirestore.getInstance();
+                        Executors.newSingleThreadExecutor().execute(() -> {
+                            try {
+                                db.collection("tasks").document(task.getId())
+                                        .update("description", newDesc, "dateTime", newDate)
+                                        .addOnSuccessListener(aVoid -> new Handler(Looper.getMainLooper()).post(() -> {
+                                            try {
+                                                task.setDescription(newDesc);
+                                                task.setDateTime(newDate);
+                                                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                                    adapter.notifyItemChanged(position);
+                                                    if (adapter.progressUpdateCallback != null) {
+                                                        adapter.progressUpdateCallback.run();
+                                                    }
+                                                }, 100);
+                                                dismiss();
+                                            } catch (Exception e) {
+                                                Log.e(TAG, "Ошибка обновления задачи в списке: " + e.getMessage(), e);
+                                                Toast.makeText(getContext(), "Ошибка редактирования", Toast.LENGTH_SHORT).show();
+                                            }
+                                        }))
+                                        .addOnFailureListener(e -> new Handler(Looper.getMainLooper()).post(() ->
+                                                Toast.makeText(getContext(), "Ошибка редактирования: " + e.getMessage(), Toast.LENGTH_SHORT).show()));
+                            } catch (Exception e) {
+                                Log.e(TAG, "Ошибка редактирования задачи: " + e.getMessage(), e);
+                                new Handler(Looper.getMainLooper()).post(() ->
+                                        Toast.makeText(getContext(), "Ошибка редактирования", Toast.LENGTH_SHORT).show());
+                            }
+                        });
+                    } catch (Exception e) {
+                        Log.e(TAG, "Ошибка в обработчике кнопки редактирования: " + e.getMessage(), e);
+                        Toast.makeText(getContext(), "Ошибка редактирования", Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                return builder.create();
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка создания диалога редактирования: " + e.getMessage(), e);
+                Toast.makeText(getContext(), "Ошибка открытия диалога", Toast.LENGTH_SHORT).show();
+                return new androidx.appcompat.app.AlertDialog.Builder(requireActivity()).create();
+            }
+        }
+    }
+
+    public static class AddSubTaskDialogFragment extends DialogFragment {
+        private Task task;
+        private int position;
+        private TaskAdapter adapter;
+
+        public static AddSubTaskDialogFragment newInstance(Task task, int position, TaskAdapter adapter) {
+            AddSubTaskDialogFragment fragment = new AddSubTaskDialogFragment();
+            fragment.task = task;
+            fragment.position = position;
+            fragment.adapter = adapter;
+            return fragment;
+        }
+
+        @NonNull
+        @Override
+        public android.app.Dialog onCreateDialog(@NonNull Bundle savedInstanceState) {
+            try {
+                androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(requireActivity());
+                View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_add_task, null);
+                builder.setView(dialogView);
+
+                EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
+                Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
+                Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
+                Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+
+                pickDateButton.setVisibility(View.GONE);
+                pickTimeButton.setVisibility(View.GONE);
+                addTaskButton.setText("Добавить подзадачу");
+
+                addTaskButton.setOnClickListener(v -> {
+                    try {
+                        String description = taskDescription.getText().toString().trim();
+                        if (description.isEmpty()) {
+                            Toast.makeText(getContext(), "Введите описание подзадачи", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        Map<String, Object> subTask = new HashMap<>();
+                        subTask.put("description", description);
+                        subTask.put("isCompleted", false);
+
+                        FirebaseFirestore db = FirebaseFirestore.getInstance();
+                        Executors.newSingleThreadExecutor().execute(() -> {
+                            try {
+                                db.collection("tasks").document(task.getId()).collection("subtasks")
+                                        .add(subTask)
+                                        .addOnSuccessListener(doc -> new Handler(Looper.getMainLooper()).post(() -> {
+                                            try {
+                                                task.setExpanded(true);
+                                                task.setSubTasksLoaded(false);
+                                                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                                    adapter.notifyItemChanged(position);
+                                                    if (adapter.progressUpdateCallback != null) {
+                                                        adapter.progressUpdateCallback.run();
+                                                    }
+                                                }, 100);
+                                                dismiss();
+                                            } catch (Exception e) {
+                                                Log.e(TAG, "Ошибка обновления после добавления подзадачи: " + e.getMessage(), e);
+                                                Toast.makeText(getContext(), "Ошибка добавления подзадачи", Toast.LENGTH_SHORT).show();
+                                            }
+                                        }))
+                                        .addOnFailureListener(e -> new Handler(Looper.getMainLooper()).post(() ->
+                                                Toast.makeText(getContext(), "Ошибка добавления подзадачи: " + e.getMessage(), Toast.LENGTH_SHORT).show()));
+                            } catch (Exception e) {
+                                Log.e(TAG, "Ошибка добавления подзадачи: " + e.getMessage(), e);
+                                new Handler(Looper.getMainLooper()).post(() ->
+                                        Toast.makeText(getContext(), "Ошибка добавления подзадачи", Toast.LENGTH_SHORT).show());
+                            }
+                        });
+                    } catch (Exception e) {
+                        Log.e(TAG, "Ошибка в обработчике кнопки добавления подзадачи: " + e.getMessage(), e);
+                        Toast.makeText(getContext(), "Ошибка добавления подзадачи", Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                return builder.create();
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка создания диалога добавления подзадачи: " + e.getMessage(), e);
+                Toast.makeText(getContext(), "Ошибка открытия диалога", Toast.LENGTH_SHORT).show();
+                return new androidx.appcompat.app.AlertDialog.Builder(requireActivity()).create();
+            }
+        }
+    }
+
+    public static class AddTaskDialogFragment extends DialogFragment {
+        private TaskAdapter adapter;
+
+        public static AddTaskDialogFragment newInstance(TaskAdapter adapter) {
+            AddTaskDialogFragment fragment = new AddTaskDialogFragment();
+            fragment.adapter = adapter;
+            return fragment;
+        }
+
+        @NonNull
+        @Override
+        public android.app.Dialog onCreateDialog(@NonNull Bundle savedInstanceState) {
+            try {
+                androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(requireActivity());
+                View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_add_task, null);
+                builder.setView(dialogView);
+
+                EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
+                Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
+                Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
+                Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+
+                addTaskButton.setText("Добавить задачу");
+                Calendar calendar = Calendar.getInstance();
+                String dateTimeString = dateFormat.format(calendar.getTime());
+                pickDateButton.setText(dateTimeString.split(" ")[0]);
+                pickTimeButton.setText(dateTimeString.split(" ")[1]);
+
+                pickDateButton.setOnClickListener(v -> new DatePickerDialog(getContext(),
+                        (view, year, month, day) -> {
+                            calendar.set(year, month, day);
+                            pickDateButton.setText(day + "/" + (month + 1) + "/" + year);
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)).show());
+
+                pickTimeButton.setOnClickListener(v -> new TimePickerDialog(getContext(),
+                        (view, hour, minute) -> {
+                            calendar.set(Calendar.HOUR_OF_DAY, hour);
+                            calendar.set(Calendar.MINUTE, minute);
+                            pickTimeButton.setText(String.format(Locale.getDefault(), "%02d:%02d", hour, minute));
+                        },
+                        calendar.get(Calendar.HOUR_OF_DAY),
+                        calendar.get(Calendar.MINUTE),
+                        true).show());
+
+                addTaskButton.setOnClickListener(v -> {
+                    try {
+                        String description = taskDescription.getText().toString().trim();
+                        if (description.isEmpty()) {
+                            Toast.makeText(getContext(), "Введите описание задачи", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        Date dateTime = calendar.getTime();
+
+                        Task newTask = new Task();
+                        newTask.setDescription(description);
+                        newTask.setDateTime(dateTime);
+                        newTask.setCompleted(false);
+                        newTask.setExpanded(false);
+                        newTask.setSubTasksLoaded(false);
+
+                        FirebaseFirestore db = FirebaseFirestore.getInstance();
+                        Executors.newSingleThreadExecutor().execute(() -> {
+                            try {
+                                Map<String, Object> taskData = new HashMap<>();
+                                taskData.put("description", description);
+                                taskData.put("dateTime", dateTime);
+                                taskData.put("isCompleted", false);
+                                taskData.put("isExpanded", false);
+
+                                db.collection("tasks")
+                                        .add(taskData)
+                                        .addOnSuccessListener(docRef -> new Handler(Looper.getMainLooper()).post(() -> {
+                                            try {
+                                                newTask.setId(docRef.getId());
+                                                adapter.taskList.add(newTask);
+                                                Collections.sort(adapter.taskList, Comparator.comparing(Task::getDateTime));
+                                                int newPosition = adapter.taskList.indexOf(newTask);
+                                                if (newPosition >= 0 && newPosition < adapter.taskList.size()) {
+                                                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                                        try {
+                                                            adapter.notifyItemInserted(newPosition);
+                                                            if (adapter.progressUpdateCallback != null) {
+                                                                adapter.progressUpdateCallback.run();
+                                                            }
+                                                        } catch (Exception e) {
+                                                            Log.e(TAG, "Ошибка при уведомлении адаптера: " + e.getMessage(), e);
+                                                            Toast.makeText(getContext(), "Ошибка добавления задачи", Toast.LENGTH_SHORT).show();
+                                                        }
+                                                    }, 100);
+                                                } else {
+                                                    Log.e(TAG, "Неверная позиция для новой задачи: " + newPosition);
+                                                }
+                                                dismiss();
+                                            } catch (Exception e) {
+                                                Log.e(TAG, "Ошибка добавления задачи в список: " + e.getMessage(), e);
+                                                Toast.makeText(getContext(), "Ошибка добавления задачи", Toast.LENGTH_SHORT).show();
+                                            }
+                                        }))
+                                        .addOnFailureListener(e -> new Handler(Looper.getMainLooper()).post(() ->
+                                                Toast.makeText(getContext(), "Ошибка добавления задачи: " + e.getMessage(), Toast.LENGTH_SHORT).show()));
+                            } catch (Exception e) {
+                                Log.e(TAG, "Ошибка добавления задачи в Firestore: " + e.getMessage(), e);
+                                new Handler(Looper.getMainLooper()).post(() ->
+                                        Toast.makeText(getContext(), "Ошибка добавления задачи", Toast.LENGTH_SHORT).show());
+                            }
+                        });
+                    } catch (Exception e) {
+                        Log.e(TAG, "Ошибка в обработчике кнопки добавления задачи: " + e.getMessage(), e);
+                        Toast.makeText(getContext(), "Ошибка добавления задачи", Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                return builder.create();
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка создания диалога добавления задачи: " + e.getMessage(), e);
+                Toast.makeText(getContext(), "Ошибка открытия диалога", Toast.LENGTH_SHORT).show();
+                return new androidx.appcompat.app.AlertDialog.Builder(requireActivity()).create();
+            }
+        }
+    }
+
+    private static class TaskDiffCallback extends DiffUtil.Callback {
+        private final List<Task> oldList;
+        private final List<Task> newList;
+
+        TaskDiffCallback(List<Task> oldList, List<Task> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return oldList.get(oldItemPosition).getId().equals(newList.get(newItemPosition).getId());
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            Task oldTask = oldList.get(oldItemPosition);
+            Task newTask = newList.get(newItemPosition);
+            return oldTask.isCompleted() == newTask.isCompleted() &&
+                    oldTask.getDescription().equals(newTask.getDescription()) &&
+                    (oldTask.getDateTime() == null && newTask.getDateTime() == null ||
+                            (oldTask.getDateTime() != null && newTask.getDateTime() != null && oldTask.getDateTime().equals(newTask.getDateTime())));
+        }
+    }
+
+    private void showToast(String message) {
+        Context context = contextRef.get();
+        if (context != null) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
         }
     }
 }

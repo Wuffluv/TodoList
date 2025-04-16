@@ -4,7 +4,8 @@ import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -22,6 +23,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 public class SettingsActivity extends AppCompatActivity {
     private Button logoutButton;
@@ -35,13 +37,11 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.settings_activity);
 
-        // Инициализация Firebase
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
         userId = auth.getCurrentUser() != null ? auth.getCurrentUser().getUid() : null;
-        selectedCalendarDate = Calendar.getInstance(); // Для диалога добавления задачи
+        selectedCalendarDate = Calendar.getInstance();
 
-        // Проверка авторизации
         if (userId == null) {
             Toast.makeText(this, "Пожалуйста, войдите в систему", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(this, MainActivity.class));
@@ -49,11 +49,9 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
-        // Инициализация элементов интерфейса
         logoutButton = findViewById(R.id.logoutButton);
         BottomNavigationView bottomNav = findViewById(R.id.bottomNavigationView);
 
-        // Обработчик кнопки выхода
         logoutButton.setOnClickListener(v -> {
             FirebaseAuth.getInstance().signOut();
             Intent intent = new Intent(SettingsActivity.this, MainActivity.class);
@@ -62,27 +60,22 @@ public class SettingsActivity extends AppCompatActivity {
             finish();
         });
 
-        // Настройка BottomNavigationView
         bottomNav.setOnNavigationItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.nav_tasks) {
-                // Переход в MainMenuActivity
                 Intent intent = new Intent(SettingsActivity.this, MainMenuActivity.class);
                 startActivity(intent);
                 finish();
                 return true;
             } else if (itemId == R.id.nav_add_task) {
-                // Открытие диалога добавления задачи
                 showAddTaskDialog();
                 return true;
             } else if (itemId == R.id.nav_settings) {
-                // Уже находимся в настройках
                 return true;
             }
             return false;
         });
 
-        // Установка текущей вкладки как "Настройки"
         bottomNav.setSelectedItemId(R.id.nav_settings);
     }
 
@@ -97,10 +90,7 @@ public class SettingsActivity extends AppCompatActivity {
         Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
         ImageButton collapseButton = dialogView.findViewById(R.id.collapseButton);
 
-        // Используем текущую дату
         Calendar calendar = (Calendar) selectedCalendarDate.clone();
-
-        // Установка начальных значений
         pickDateButton.setText(String.format("%02d/%02d/%d",
                 calendar.get(Calendar.DAY_OF_MONTH),
                 calendar.get(Calendar.MONTH) + 1,
@@ -113,7 +103,6 @@ public class SettingsActivity extends AppCompatActivity {
                 now.get(Calendar.HOUR_OF_DAY),
                 now.get(Calendar.MINUTE)));
 
-        // Обработчики
         collapseButton.setOnClickListener(v -> bottomSheetDialog.dismiss());
 
         pickDateButton.setOnClickListener(v -> {
@@ -158,19 +147,18 @@ public class SettingsActivity extends AppCompatActivity {
             task.put("isCompleted", false);
             task.put("isExpanded", false);
 
-            db.collection("tasks").add(task)
-                    .addOnSuccessListener(doc -> {
-                        bottomSheetDialog.dismiss();
-                        Toast.makeText(this, "Задача добавлена", Toast.LENGTH_SHORT).show();
-                        // Перенаправление в MainMenuActivity после добавления задачи
-                        Intent intent = new Intent(SettingsActivity.this, MainMenuActivity.class);
-                        startActivity(intent);
-                        finish();
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e("FirestoreError", "Ошибка добавления задачи: " + e.getMessage());
-                        Toast.makeText(this, "Ошибка добавления задачи", Toast.LENGTH_SHORT).show();
-                    });
+            Executors.newSingleThreadExecutor().execute(() -> {
+                db.collection("tasks").add(task)
+                        .addOnSuccessListener(doc -> runOnUiThread(() -> {
+                            bottomSheetDialog.dismiss();
+                            Toast.makeText(this, "Задача добавлена", Toast.LENGTH_SHORT).show();
+                            Intent intent = new Intent(SettingsActivity.this, MainMenuActivity.class);
+                            startActivity(intent);
+                            finish();
+                        }))
+                        .addOnFailureListener(e -> runOnUiThread(() ->
+                                Toast.makeText(this, "Ошибка добавления задачи", Toast.LENGTH_SHORT).show()));
+            });
         });
 
         bottomSheetDialog.show();

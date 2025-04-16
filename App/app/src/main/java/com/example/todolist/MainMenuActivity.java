@@ -4,6 +4,8 @@ import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -17,154 +19,196 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.annotation.NonNull;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
-// Класс MainMenuActivity отвечает за основной экран приложения, где отображается список задач
 public class MainMenuActivity extends AppCompatActivity {
-    // Адаптер для отображения задач в RecyclerView
+    private static final String TAG = "MainMenuActivity";
     private TaskAdapter taskAdapter;
-    // Прогресс-бар для отображения процента выполненных задач
     private ProgressBar taskProgressBar;
-    // Текстовое поле для отображения процента прогресса
     private TextView progressTextView;
-    // Экземпляр Firestore для работы с базой данных
     private FirebaseFirestore db;
-    // Экземпляр FirebaseAuth для управления авторизацией
     private FirebaseAuth auth;
-    // Идентификатор текущего пользователя
     private String userId;
-    // Календарь для выбора даты задач
     private CalendarView calendarView;
-    // Объект Calendar для хранения выбранной даты
     private Calendar selectedCalendarDate;
+    private FloatingActionButton showAddedTasksButton;
+    private ImageButton backButton;
+    private View calendarContainer;
+    private RecyclerView taskRecyclerView;
+    private ListenerRegistration tasksListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Установка макета для активности
         setContentView(R.layout.mainmenu);
 
-        // Инициализация Firebase Authentication
         auth = FirebaseAuth.getInstance();
-        // Получение текущего пользователя
         FirebaseUser currentUser = auth.getCurrentUser();
-
-        // Проверка, авторизован ли пользователь
         if (currentUser == null) {
-            // Если пользователь не авторизован, показываем уведомление и перенаправляем на экран входа
             Toast.makeText(this, "Пожалуйста, войдите в систему", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(this, MainActivity.class));
             finish();
             return;
         }
 
-        // Сохранение идентификатора пользователя
         userId = currentUser.getUid();
-        // Инициализация Firestore
         db = FirebaseFirestore.getInstance();
 
-        // Инициализация элементов интерфейса
-        taskProgressBar = findViewById(R.id.taskProgressBar); // Прогресс-бар
-        progressTextView = findViewById(R.id.progressTextView); // Текст прогресса
-        RecyclerView taskRecyclerView = findViewById(R.id.taskRecyclerView); // Список задач
-        calendarView = findViewById(R.id.calendarView); // Календарь для выбора даты
-        BottomNavigationView bottomNav = findViewById(R.id.bottomNavigationView); // Нижняя панель навигации
-
-        // Инициализация адаптера для списка задач
-        List<Task> userTasks = new ArrayList<>(); // Создаём пустой список задач
-        taskAdapter = new TaskAdapter(userTasks, this::updateProgressBar, this); // Создаём адаптер
-        taskRecyclerView.setAdapter(taskAdapter); // Устанавливаем адаптер для RecyclerView
-        taskRecyclerView.setLayoutManager(new LinearLayoutManager(this)); // Устанавливаем линейный менеджер компоновки
-
-        // Инициализация даты для календаря
-        selectedCalendarDate = Calendar.getInstance(); // Устанавливаем текущую дату
-        calendarView.setDate(selectedCalendarDate.getTimeInMillis(), true, true); // Устанавливаем дату в календаре
-
-        // Настройка слушателя для календаря
-        calendarView.setOnDateChangeListener((view, year, month, dayOfMonth) -> {
-            // При изменении даты обновляем selectedCalendarDate и загружаем задачи
-            selectedCalendarDate.set(year, month, dayOfMonth);
-            loadTasks(selectedCalendarDate);
+        db.enableNetwork().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                Log.d(TAG, "Firestore network enabled");
+            } else {
+                Log.e(TAG, "Failed to enable Firestore network", task.getException());
+            }
         });
 
-        // Настройка слушателя для нижней панели навигации
+        taskProgressBar = findViewById(R.id.taskProgressBar);
+        progressTextView = findViewById(R.id.progressTextView);
+        taskRecyclerView = findViewById(R.id.taskRecyclerView);
+        calendarView = findViewById(R.id.calendarView);
+        calendarContainer = findViewById(R.id.calendar_container);
+        BottomNavigationView bottomNav = findViewById(R.id.bottomNavigationView);
+        showAddedTasksButton = findViewById(R.id.showAddedTasksButton);
+        backButton = findViewById(R.id.backButton);
+
+        List<Task> userTasks = new ArrayList<>();
+        taskAdapter = new TaskAdapter(userTasks, this::updateProgressBar, this);
+        taskRecyclerView.setAdapter(taskAdapter);
+        taskRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        selectedCalendarDate = Calendar.getInstance();
+        if (calendarView != null) {
+            calendarView.setDate(selectedCalendarDate.getTimeInMillis(), true, true);
+        } else {
+            Log.e(TAG, "calendarView is null during onCreate");
+        }
+
+        if (calendarView != null) {
+            calendarView.setOnDateChangeListener((view, year, month, dayOfMonth) -> {
+                if (isFinishing()) return;
+                selectedCalendarDate.set(year, month, dayOfMonth);
+                Log.d(TAG, "Selected date changed to: " + year + "/" + (month + 1) + "/" + dayOfMonth);
+                loadTasks(selectedCalendarDate);
+            });
+        }
+
         bottomNav.setOnNavigationItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.nav_tasks) {
-                // При выборе вкладки "Задачи" загружаем задачи
+                if (selectedCalendarDate == null) {
+                    Log.e(TAG, "selectedCalendarDate is null in nav_tasks");
+                    selectedCalendarDate = Calendar.getInstance();
+                }
                 loadTasks(selectedCalendarDate);
+                showCalendarView();
                 return true;
             } else if (itemId == R.id.nav_add_task) {
-                // При выборе вкладки "Добавить задачу" показываем диалог добавления
                 showAddTaskDialog();
                 return true;
             } else if (itemId == R.id.nav_settings) {
-                // При выборе вкладки "Настройки" переходим в SettingsActivity
                 startActivity(new Intent(this, SettingsActivity.class));
                 return true;
             }
             return false;
         });
 
-        // Первоначальная загрузка задач и обновление прогресса
-        loadTasks(selectedCalendarDate); // Загружаем задачи для текущей даты
-        updateProgressBar(); // Обновляем прогресс-бар
+        showAddedTasksButton.setOnClickListener(v -> {
+            try {
+                if (isFinishing()) return;
+                Log.d(TAG, "showAddedTasksButton clicked");
+                loadAllTasks();
+                hideCalendarView();
+            } catch (Exception e) {
+                Log.e(TAG, "Error in showAddedTasksButton click: " + e.getMessage(), e);
+                Toast.makeText(this, "Ошибка при загрузке всех задач", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        backButton.setOnClickListener(v -> {
+            try {
+                if (isFinishing()) return;
+                Log.d(TAG, "backButton clicked");
+                debugState("Before loadTasks in backButton");
+                if (selectedCalendarDate == null) {
+                    Log.e(TAG, "selectedCalendarDate is null in backButton click");
+                    selectedCalendarDate = Calendar.getInstance();
+                }
+                loadTasks(selectedCalendarDate);
+                showCalendarView();
+            } catch (Exception e) {
+                Log.e(TAG, "Error in backButton click: " + e.getMessage(), e);
+                Toast.makeText(this, "Ошибка при возврате к календарю", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        if (selectedCalendarDate == null) {
+            Log.e(TAG, "selectedCalendarDate is null during initial load");
+            selectedCalendarDate = Calendar.getInstance();
+        }
+        loadTasks(selectedCalendarDate);
+        updateProgressBar();
     }
 
-    // Метод для отображения диалога добавления задачи
+    private void debugState(String checkpoint) {
+        Log.d(TAG, "Debug state at " + checkpoint + ":");
+        Log.d(TAG, "selectedCalendarDate: " + (selectedCalendarDate != null ? selectedCalendarDate.getTime().toString() : "null"));
+        Log.d(TAG, "taskAdapter: " + (taskAdapter != null ? "not null" : "null"));
+        Log.d(TAG, "taskRecyclerView: " + (taskRecyclerView != null ? "not null" : "null"));
+        Log.d(TAG, "calendarContainer: " + (calendarContainer != null ? "not null" : "null"));
+        Log.d(TAG, "calendarView: " + (calendarView != null ? "not null" : "null"));
+        Log.d(TAG, "backButton: " + (backButton != null ? "not null" : "null"));
+        Log.d(TAG, "showAddedTasksButton: " + (showAddedTasksButton != null ? "not null" : "null"));
+        Log.d(TAG, "isGroupedView: " + (taskAdapter != null ? taskAdapter.isGroupedView() : "unknown"));
+    }
+
     private void showAddTaskDialog() {
-        // Создаём диалог BottomSheetDialog
+        if (isFinishing()) return;
         BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(this);
-        // Загружаем макет диалога
         View dialogView = getLayoutInflater().inflate(R.layout.bottom_sheet_add_task, null);
         bottomSheetDialog.setContentView(dialogView);
 
-        // Инициализация элементов диалога
-        EditText taskDescription = dialogView.findViewById(R.id.taskDescription); // Поле для описания задачи
-        Button pickDateButton = dialogView.findViewById(R.id.pickDateButton); // Кнопка выбора даты
-        Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton); // Кнопка выбора времени
-        Button addTaskButton = dialogView.findViewById(R.id.addTaskButton); // Кнопка добавления задачи
-        ImageButton collapseButton = dialogView.findViewById(R.id.collapseButton); // Кнопка сворачивания диалога
+        EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
+        Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
+        Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
+        Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
+        ImageButton collapseButton = dialogView.findViewById(R.id.collapseButton);
 
-        // Копируем выбранную дату из календаря для использования в диалоге
         Calendar calendar = (Calendar) selectedCalendarDate.clone();
-
-        // Установка начальных значений для даты и времени
         pickDateButton.setText(String.format("%02d/%02d/%d",
                 calendar.get(Calendar.DAY_OF_MONTH),
                 calendar.get(Calendar.MONTH) + 1,
-                calendar.get(Calendar.YEAR))); // Устанавливаем текущую дату
+                calendar.get(Calendar.YEAR)));
 
         Calendar now = Calendar.getInstance();
         calendar.set(Calendar.HOUR_OF_DAY, now.get(Calendar.HOUR_OF_DAY));
         calendar.set(Calendar.MINUTE, now.get(Calendar.MINUTE));
         pickTimeButton.setText(String.format("%02d:%02d",
                 now.get(Calendar.HOUR_OF_DAY),
-                now.get(Calendar.MINUTE))); // Устанавливаем текущее время
+                now.get(Calendar.MINUTE)));
 
-        // Обработчик кнопки сворачивания диалога
         collapseButton.setOnClickListener(v -> bottomSheetDialog.dismiss());
 
-        // Обработчик кнопки выбора даты
         pickDateButton.setOnClickListener(v -> {
-            // Открываем диалог выбора даты
             new DatePickerDialog(
                     this,
                     (view, year, month, dayOfMonth) -> {
-                        // Обновляем дату в calendar и отображаем её на кнопке
                         calendar.set(year, month, dayOfMonth);
                         pickDateButton.setText(String.format("%02d/%02d/%d",
                                 dayOfMonth, month + 1, year));
@@ -175,13 +219,10 @@ public class MainMenuActivity extends AppCompatActivity {
             ).show();
         });
 
-        // Обработчик кнопки выбора времени
         pickTimeButton.setOnClickListener(v -> {
-            // Открываем диалог выбора времени
             new TimePickerDialog(
                     this,
                     (view, hourOfDay, minute) -> {
-                        // Обновляем время в calendar и отображаем его на кнопке
                         calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
                         calendar.set(Calendar.MINUTE, minute);
                         pickTimeButton.setText(String.format("%02d:%02d", hourOfDay, minute));
@@ -192,121 +233,296 @@ public class MainMenuActivity extends AppCompatActivity {
             ).show();
         });
 
-        // Обработчик кнопки добавления задачи
         addTaskButton.setOnClickListener(v -> {
-            // Получаем описание задачи и удаляем пробелы
             String description = taskDescription.getText().toString().trim();
-            // Проверяем, что описание не пустое
             if (description.isEmpty()) {
                 Toast.makeText(this, "Введите описание задачи", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            // Формируем объект задачи для сохранения в Firestore
             Map<String, Object> task = new HashMap<>();
-            task.put("userId", userId); // Идентификатор пользователя
-            task.put("description", description); // Описание задачи
-            task.put("dateTime", calendar.getTime()); // Дата и время задачи
-            task.put("isCompleted", false); // Статус выполнения (по умолчанию false)
-            task.put("isExpanded", false); // Флаг для интерфейса (по умолчанию false)
+            task.put("userId", userId);
+            task.put("description", description);
+            task.put("dateTime", calendar.getTime());
+            task.put("isCompleted", false);
+            task.put("isExpanded", false);
 
-            // Сохраняем задачу в Firestore
-            db.collection("tasks").add(task)
-                    .addOnSuccessListener(doc -> {
-                        // При успешном добавлении закрываем диалог и перезагружаем список задач
-                        bottomSheetDialog.dismiss();
-                        loadTasks(selectedCalendarDate);
-                    })
-                    .addOnFailureListener(e -> {
-                        // При ошибке показываем уведомление
-                        Log.e("FirestoreError", "Ошибка добавления задачи: " + e.getMessage());
-                        Toast.makeText(this, "Ошибка добавления задачи", Toast.LENGTH_SHORT).show();
-                    });
+            // Закрываем диалог сразу после вызова add(), так как Firestore обработает это локально
+            bottomSheetDialog.dismiss();
+            Toast.makeText(this, "Задача добавлена", Toast.LENGTH_SHORT).show();
+
+            Executors.newSingleThreadExecutor().execute(() -> {
+                db.collection("tasks").add(task)
+                        .addOnFailureListener(e -> runOnUiThread(() ->
+                                Toast.makeText(this, "Ошибка добавления задачи: " + e.getMessage(), Toast.LENGTH_SHORT).show()));
+            });
         });
 
-        // Показываем диалог
         bottomSheetDialog.show();
     }
 
-    // Метод для загрузки задач из Firestore
     private void loadTasks(Calendar selectedDate) {
-        // Определяем начало дня для выбранной даты
+        if (isFinishing()) return;
+        if (selectedDate == null) {
+            Log.e(TAG, "selectedDate is null in loadTasks");
+            selectedDate = Calendar.getInstance();
+        }
+
         Calendar startOfDay = (Calendar) selectedDate.clone();
         startOfDay.set(Calendar.HOUR_OF_DAY, 0);
         startOfDay.set(Calendar.MINUTE, 0);
         startOfDay.set(Calendar.SECOND, 0);
         startOfDay.set(Calendar.MILLISECOND, 0);
 
-        // Определяем конец дня для выбранной даты
         Calendar endOfDay = (Calendar) selectedDate.clone();
         endOfDay.set(Calendar.HOUR_OF_DAY, 23);
         endOfDay.set(Calendar.MINUTE, 59);
         endOfDay.set(Calendar.SECOND, 59);
         endOfDay.set(Calendar.MILLISECOND, 999);
 
-        // Логируем информацию о запросе
-        Log.d("Firestore", "Загрузка задач для userId: " + userId + ", дата: " + selectedDate.getTime());
-        Log.d("Firestore", "Диапазон: " + startOfDay.getTime() + " - " + endOfDay.getTime());
+        Log.d(TAG, "Loading tasks for date range: " + startOfDay.getTime() + " to " + endOfDay.getTime());
 
-        // Выполняем запрос к Firestore для получения задач
-        db.collection("tasks")
-                .whereEqualTo("userId", userId) // Фильтруем по пользователю
-                .whereGreaterThanOrEqualTo("dateTime", startOfDay.getTime()) // Фильтруем по началу дня
-                .whereLessThanOrEqualTo("dateTime", endOfDay.getTime()) // Фильтруем по концу дня
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    // Создаём список для хранения задач
-                    List<Task> tasks = new ArrayList<>();
-                    // Обрабатываем каждый документ из результата запроса
-                    for (QueryDocumentSnapshot doc : querySnapshot) {
-                        // Преобразуем документ в объект Task
+        if (tasksListener != null) {
+            tasksListener.remove();
+            tasksListener = null;
+        }
+
+        Query query = db.collection("tasks")
+                .whereEqualTo("userId", userId)
+                .whereGreaterThanOrEqualTo("dateTime", startOfDay.getTime())
+                .whereLessThanOrEqualTo("dateTime", endOfDay.getTime());
+
+        tasksListener = query.addSnapshotListener((querySnapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Failed to listen for tasks: " + error.getMessage(), error);
+                Toast.makeText(this, "Ошибка загрузки задач", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            List<Task> tasks = new ArrayList<>();
+            if (querySnapshot != null) {
+                for (QueryDocumentSnapshot doc : querySnapshot) {
+                    try {
                         Task task = doc.toObject(Task.class);
-                        // Устанавливаем ID задачи
                         task.setId(doc.getId());
+                        if (task.getDateTime() == null) {
+                            Log.w(TAG, "Task " + task.getId() + " has null dateTime, skipping");
+                            continue;
+                        }
                         tasks.add(task);
-                        // Логируем информацию о загруженной задаче
-                        Log.d("Firestore", "Загружена задача: " + task.getDescription() + ", dateTime: " + task.getDateTime());
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error parsing task " + doc.getId() + ": " + e.getMessage(), e);
                     }
-                    // Логируем общее количество загруженных задач
-                    Log.d("Firestore", "Всего загружено задач: " + tasks.size());
-                    // Обновляем адаптер новым списком задач
-                    taskAdapter.setTasks(tasks);
-                    // Обновляем прогресс-бар
-                    updateProgressBar();
-                })
-                .addOnFailureListener(e -> {
-                    // При ошибке показываем уведомление
-                    Log.e("FirestoreError", "Ошибка загрузки задач: " + e.getMessage());
-                    Toast.makeText(this, "Ошибка загрузки задач: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
+                }
+            }
+
+            Log.d(TAG, "Loaded " + tasks.size() + " tasks for the selected date");
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    if (taskAdapter != null) {
+                        taskRecyclerView.setAdapter(null);
+                        taskAdapter.setTasks(tasks);
+                        taskRecyclerView.setAdapter(taskAdapter);
+                        updateProgressBar();
+                    } else {
+                        Log.e(TAG, "taskAdapter is null in loadTasks");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error updating UI in loadTasks: " + e.getMessage(), e);
+                    Toast.makeText(this, "Ошибка обновления списка задач", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
 
-    // Метод для обновления прогресс-бара
-    public void updateProgressBar() {
-        // Получаем общее количество задач
-        int totalTasks = taskAdapter.getItemCount();
-        // Получаем количество выполненных задач
-        int completedTasks = taskAdapter.getCompletedTaskCount();
-        // Вычисляем процент выполненных задач
-        int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
+    private void loadAllTasks() {
+        if (isFinishing()) return;
+        Log.d(TAG, "Loading all tasks for user: " + userId);
 
-        // Логируем информацию о прогрессе
-        Log.d("Progress", "Общее количество задач: " + totalTasks + ", выполнено: " + completedTasks + ", прогресс: " + progress + "%");
-        // Устанавливаем значение прогресс-бара
-        taskProgressBar.setProgress(progress);
-        // Обновляем текст прогресса
-        progressTextView.setText("Прогресс: " + progress + "%");
+        if (tasksListener != null) {
+            tasksListener.remove();
+            tasksListener = null;
+        }
+
+        Query query = db.collection("tasks")
+                .whereEqualTo("userId", userId);
+
+        tasksListener = query.addSnapshotListener((querySnapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Failed to listen for all tasks: " + error.getMessage(), error);
+                Toast.makeText(this, "Ошибка загрузки всех задач", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            List<Task> tasks = new ArrayList<>();
+            if (querySnapshot != null) {
+                for (QueryDocumentSnapshot doc : querySnapshot) {
+                    try {
+                        Task task = doc.toObject(Task.class);
+                        task.setId(doc.getId());
+                        if (task.getDateTime() == null) {
+                            Log.w(TAG, "Task " + task.getId() + " has null dateTime, skipping");
+                            continue;
+                        }
+                        tasks.add(task);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error parsing task " + doc.getId() + ": " + e.getMessage(), e);
+                    }
+                }
+            }
+
+            Log.d(TAG, "Loaded " + tasks.size() + " tasks in total");
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    if (taskAdapter != null) {
+                        taskRecyclerView.setAdapter(null);
+                        taskAdapter.setGroupedTasks(tasks);
+                        taskRecyclerView.setAdapter(taskAdapter);
+                        updateProgressBar();
+                    } else {
+                        Log.e(TAG, "taskAdapter is null in loadAllTasks");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error updating UI in loadAllTasks: " + e.getMessage(), e);
+                    Toast.makeText(this, "Ошибка обновления списка задач", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+    }
+
+    private void showCalendarView() {
+        if (isFinishing()) return;
+        Log.d(TAG, "Showing calendar view");
+        try {
+            if (calendarContainer != null) {
+                calendarContainer.setVisibility(View.VISIBLE);
+            } else {
+                Log.e(TAG, "calendarContainer is null in showCalendarView");
+            }
+            if (backButton != null) {
+                backButton.setVisibility(View.GONE);
+            } else {
+                Log.e(TAG, "backButton is null in showCalendarView");
+            }
+            if (showAddedTasksButton != null) {
+                showAddedTasksButton.setVisibility(View.VISIBLE);
+            } else {
+                Log.e(TAG, "showAddedTasksButton is null in showCalendarView");
+            }
+            if (calendarView != null && selectedCalendarDate != null) {
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (isFinishing()) return;
+                    try {
+                        calendarView.setDate(selectedCalendarDate.getTimeInMillis(), true, true);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error setting date on calendarView: " + e.getMessage(), e);
+                    }
+                }, 100);
+            } else {
+                Log.e(TAG, "calendarView or selectedCalendarDate is null in showCalendarView");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in showCalendarView: " + e.getMessage(), e);
+            Toast.makeText(this, "Ошибка отображения календаря", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void hideCalendarView() {
+        if (isFinishing()) return;
+        Log.d(TAG, "Hiding calendar view");
+        try {
+            if (calendarContainer != null) {
+                calendarContainer.setVisibility(View.GONE);
+            } else {
+                Log.e(TAG, "calendarContainer is null in hideCalendarView");
+            }
+            if (backButton != null) {
+                backButton.setVisibility(View.VISIBLE);
+            } else {
+                Log.e(TAG, "backButton is null in hideCalendarView");
+            }
+            if (showAddedTasksButton != null) {
+                showAddedTasksButton.setVisibility(View.GONE);
+            } else {
+                Log.e(TAG, "showAddedTasksButton is null in hideCalendarView");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in hideCalendarView: " + e.getMessage(), e);
+            Toast.makeText(this, "Ошибка скрытия календаря", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void updateProgressBar() {
+        if (isFinishing()) return;
+        try {
+            if (taskAdapter == null) {
+                Log.e(TAG, "taskAdapter is null in updateProgressBar");
+                return;
+            }
+            int totalTasks = taskAdapter.getItemCount();
+            int completedTasks = taskAdapter.getCompletedTaskCount();
+            int progress = totalTasks > 0 ? (completedTasks * 100 / totalTasks) : 0;
+
+            if (taskProgressBar != null) {
+                taskProgressBar.setProgress(progress);
+            } else {
+                Log.e(TAG, "taskProgressBar is null in updateProgressBar");
+            }
+            if (progressTextView != null) {
+                progressTextView.setText("Прогресс: " + progress + "%");
+            } else {
+                Log.e(TAG, "progressTextView is null in updateProgressBar");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in updateProgressBar: " + e.getMessage(), e);
+        }
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        // Проверяем, авторизован ли пользователь при возвращении в активность
         FirebaseUser currentUser = auth.getCurrentUser();
         if (currentUser == null) {
-            // Если пользователь не авторизован, перенаправляем на экран входа
             startActivity(new Intent(this, MainActivity.class));
             finish();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (tasksListener != null) {
+            tasksListener.remove();
+            tasksListener = null;
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (selectedCalendarDate != null) {
+            outState.putLong("selectedCalendarDate", selectedCalendarDate.getTimeInMillis());
+        }
+        outState.putBoolean("isGroupedView", taskAdapter != null && taskAdapter.isGroupedView());
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        long dateMillis = savedInstanceState.getLong("selectedCalendarDate", -1);
+        if (dateMillis != -1) {
+            selectedCalendarDate = Calendar.getInstance();
+            selectedCalendarDate.setTimeInMillis(dateMillis);
+        }
+        boolean isGrouped = savedInstanceState.getBoolean("isGroupedView", false);
+        if (isGrouped) {
+            loadAllTasks();
+            hideCalendarView();
+        } else {
+            loadTasks(selectedCalendarDate);
+            showCalendarView();
         }
     }
 }
