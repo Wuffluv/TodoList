@@ -1,174 +1,113 @@
 package com.example.todolist;
 
-import android.app.DatePickerDialog;
-import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.Executors;
+import java.util.ArrayList;
 
+/**
+ * Активность настроек, позволяющая пользователю выйти из системы
+ */
 public class SettingsActivity extends AppCompatActivity {
+    // Кнопка для выхода из системы
     private Button logoutButton;
+    // Объект Firebase для авторизации
     private FirebaseAuth auth;
+    // Объект Firebase для работы с базой данных
     private FirebaseFirestore db;
+    // Идентификатор текущего пользователя
     private String userId;
-    private Calendar selectedCalendarDate;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Установка layout для активности
         setContentView(R.layout.settings_activity);
 
+        // Инициализация Firebase
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
+        // Получение идентификатора текущего пользователя
         userId = auth.getCurrentUser() != null ? auth.getCurrentUser().getUid() : null;
-        selectedCalendarDate = Calendar.getInstance();
 
+        // Проверка авторизации пользователя
         if (userId == null) {
+            // Если пользователь не авторизован, показываем сообщение и перенаправляем на экран входа
             Toast.makeText(this, "Пожалуйста, войдите в систему", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(this, MainActivity.class));
             finish();
             return;
         }
 
+        // Инициализация элементов интерфейса
         logoutButton = findViewById(R.id.logoutButton);
         BottomNavigationView bottomNav = findViewById(R.id.bottomNavigationView);
 
+        // Обработчик нажатия на кнопку выхода
         logoutButton.setOnClickListener(v -> {
+            // Выход из системы
             FirebaseAuth.getInstance().signOut();
+            // Создание интента для перехода на экран входа
             Intent intent = new Intent(SettingsActivity.this, MainActivity.class);
+            // Очистка стека активностей
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
+            // Завершение текущей активности
             finish();
         });
 
+        // Настройка навигации через BottomNavigationView
         bottomNav.setOnNavigationItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.nav_tasks) {
+                // Переход на экран списка задач
                 Intent intent = new Intent(SettingsActivity.this, MainMenuActivity.class);
                 startActivity(intent);
                 finish();
                 return true;
             } else if (itemId == R.id.nav_add_task) {
+                // Отображение диалога добавления задачи
                 showAddTaskDialog();
                 return true;
             } else if (itemId == R.id.nav_settings) {
+                // Остаемся на текущем экране настроек
                 return true;
             }
             return false;
         });
 
+        // Установка активного пункта навигации
         bottomNav.setSelectedItemId(R.id.nav_settings);
     }
 
+    /**
+     * Отображает диалог добавления новой задачи.
+     */
     private void showAddTaskDialog() {
-        BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(this);
-        View dialogView = getLayoutInflater().inflate(R.layout.bottom_sheet_add_task, null);
-        bottomSheetDialog.setContentView(dialogView);
-
-        EditText taskDescription = dialogView.findViewById(R.id.taskDescription);
-        Button pickDateButton = dialogView.findViewById(R.id.pickDateButton);
-        Button pickTimeButton = dialogView.findViewById(R.id.pickTimeButton);
-        Button addTaskButton = dialogView.findViewById(R.id.addTaskButton);
-        ImageButton collapseButton = dialogView.findViewById(R.id.collapseButton);
-
-        Calendar calendar = (Calendar) selectedCalendarDate.clone();
-        pickDateButton.setText(String.format("%02d/%02d/%d",
-                calendar.get(Calendar.DAY_OF_MONTH),
-                calendar.get(Calendar.MONTH) + 1,
-                calendar.get(Calendar.YEAR)));
-
-        Calendar now = Calendar.getInstance();
-        calendar.set(Calendar.HOUR_OF_DAY, now.get(Calendar.HOUR_OF_DAY));
-        calendar.set(Calendar.MINUTE, now.get(Calendar.MINUTE));
-        pickTimeButton.setText(String.format("%02d:%02d",
-                now.get(Calendar.HOUR_OF_DAY),
-                now.get(Calendar.MINUTE)));
-
-        collapseButton.setOnClickListener(v -> bottomSheetDialog.dismiss());
-
-        pickDateButton.setOnClickListener(v -> {
-            new DatePickerDialog(
-                    this,
-                    (view, year, month, dayOfMonth) -> {
-                        calendar.set(year, month, dayOfMonth);
-                        pickDateButton.setText(String.format("%02d/%02d/%d",
-                                dayOfMonth, month + 1, year));
-                    },
-                    calendar.get(Calendar.YEAR),
-                    calendar.get(Calendar.MONTH),
-                    calendar.get(Calendar.DAY_OF_MONTH)
-            ).show();
-        });
-
-        pickTimeButton.setOnClickListener(v -> {
-            new TimePickerDialog(
-                    this,
-                    (view, hourOfDay, minute) -> {
-                        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
-                        calendar.set(Calendar.MINUTE, minute);
-                        pickTimeButton.setText(String.format("%02d:%02d", hourOfDay, minute));
-                    },
-                    calendar.get(Calendar.HOUR_OF_DAY),
-                    calendar.get(Calendar.MINUTE),
-                    true
-            ).show();
-        });
-
-        addTaskButton.setOnClickListener(v -> {
-            String description = taskDescription.getText().toString().trim();
-            if (description.isEmpty()) {
-                Toast.makeText(this, "Введите описание задачи", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            Map<String, Object> task = new HashMap<>();
-            task.put("userId", userId);
-            task.put("description", description);
-            task.put("dateTime", calendar.getTime());
-            task.put("isCompleted", false);
-            task.put("isExpanded", false);
-
-            Executors.newSingleThreadExecutor().execute(() -> {
-                db.collection("tasks").add(task)
-                        .addOnSuccessListener(doc -> runOnUiThread(() -> {
-                            bottomSheetDialog.dismiss();
-                            Toast.makeText(this, "Задача добавлена", Toast.LENGTH_SHORT).show();
-                            Intent intent = new Intent(SettingsActivity.this, MainMenuActivity.class);
-                            startActivity(intent);
-                            finish();
-                        }))
-                        .addOnFailureListener(e -> runOnUiThread(() ->
-                                Toast.makeText(this, "Ошибка добавления задачи", Toast.LENGTH_SHORT).show()));
-            });
-        });
-
-        bottomSheetDialog.show();
+        // Создание экземпляра адаптера задач для диалога
+        TaskAdapter.AddTaskDialogFragment dialog = TaskAdapter.AddTaskDialogFragment.newInstance(
+                new TaskAdapter(new ArrayList<>(), null, this));
+        // Показ диалога
+        dialog.show(getSupportFragmentManager(), "AddTaskDialog");
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        // Проверка авторизации при старте активности
         FirebaseUser currentUser = auth.getCurrentUser();
         if (currentUser == null) {
+            // Если пользователь не авторизован, перенаправляем на экран входа
             startActivity(new Intent(this, MainActivity.class));
             finish();
         }
